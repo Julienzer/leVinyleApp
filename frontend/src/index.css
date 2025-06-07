@@ -4,7 +4,8 @@
 
 @layer base {
   body {
-    @apply bg-gray-900 text-white m-0 min-h-screen;
+    @apply min-h-screen text-white;
+    background: linear-gradient(135deg, #2D0036 0%, #0A0A23 50%, #1a1a40 100%) !important;
   }
 }
 
