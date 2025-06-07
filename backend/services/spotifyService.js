@@ -1,57 +1,45 @@
 const SpotifyWebApi = require('spotify-web-api-node');
 require('dotenv').config();
 
-// Mock data pour le développement
-const mockTracks = {
-  'track1': {
-    title: 'Bohemian Rhapsody',
-    artist: 'Queen',
-    spotify_url: 'https://open.spotify.com/track/track1'
-  },
-  'track2': {
-    title: 'Starman',
-    artist: 'David Bowie',
-    spotify_url: 'https://open.spotify.com/track/track2'
-  },
-  'track3': {
-    title: 'Sweet Home Alabama',
-    artist: 'Lynyrd Skynyrd',
-    spotify_url: 'https://open.spotify.com/track/track3'
-  }
-};
+const spotifyApi = new SpotifyWebApi({
+  clientId: process.env.SPOTIFY_CLIENT_ID,
+  clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+});
 
 class SpotifyService {
   static async initialize() {
-    console.log('Mock Spotify service initialized');
-    return true;
+    try {
+      const data = await spotifyApi.clientCredentialsGrant();
+      spotifyApi.setAccessToken(data.body['access_token']);
+      console.log('Spotify service initialized (real API)');
+    } catch (error) {
+      console.error('Error initializing Spotify API:', error);
+    }
   }
 
   static async getTrackInfo(spotifyUrl) {
+    // Extrait l'ID du morceau depuis l'URL
+    const match = spotifyUrl.match(/track\/([a-zA-Z0-9]+)/);
+    if (!match) throw new Error('Invalid Spotify URL');
+    const trackId = match[1];
     try {
-      // Simuler un délai réseau
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Extraire un ID de piste aléatoire pour la démo
-      const trackIds = Object.keys(mockTracks);
-      const randomTrackId = trackIds[Math.floor(Math.random() * trackIds.length)];
-      
-      return mockTracks[randomTrackId];
+      const data = await spotifyApi.getTrack(trackId);
+      const track = data.body;
+      return {
+        spotify_url: spotifyUrl,
+        title: track.name,
+        artist: track.artists.map(a => a.name).join(', '),
+      };
     } catch (error) {
-      console.error('Error getting track info:', error);
-      throw error;
+      console.error('Error fetching track from Spotify:', error);
+      throw new Error('Spotify track not found');
     }
   }
 
+  // Optionnel : tu peux implémenter addToPlaylist plus tard
   static async addToPlaylist(trackId, playlistId) {
-    try {
-      // Simuler un délai réseau
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log(`Mock: Added track ${trackId} to playlist ${playlistId}`);
-      return true;
-    } catch (error) {
-      console.error('Error adding track to playlist:', error);
-      throw error;
-    }
+    // À implémenter si besoin
+    return true;
   }
 }
 

@@ -7,7 +7,10 @@ class TrackController {
       const { spotify_url, submitted_by } = req.body;
 
       // Validate Spotify URL
-      if (!spotify_url || !spotify_url.includes('spotify.com/track/')) {
+      if (
+        !spotify_url ||
+        !/^https:\/\/open\.spotify\.com\/(intl-[a-z]{2}\/)?track\/[a-zA-Z0-9]+/.test(spotify_url)
+      ) {
         return res.status(400).json({ error: 'Invalid Spotify URL' });
       }
 

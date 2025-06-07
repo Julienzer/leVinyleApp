@@ -48,11 +48,34 @@ export default function TrackSubmission() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSuccess(true);
+    setSuccess(false);
     setError('');
-    // Ici, tu pourras brancher l'API plus tard
+    try {
+      const response = await fetch('/api/submit-track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spotify_url: url,
+          submitted_by: pseudo,
+          message: message
+        })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.error || 'Erreur lors de la soumission');
+        setSuccess(false);
+        return;
+      }
+      setSuccess(true);
+      setUrl('');
+      setPseudo('');
+      setMessage('');
+    } catch (err) {
+      setError('Erreur réseau');
+      setSuccess(false);
+    }
   };
 
   return (

@@ -6,15 +6,18 @@ Une application web moderne pour gérer et partager vos playlists musicales. Dé
 
 - Création et gestion de playlists
 - Intégration avec Spotify
+- Authentification Twitch pour les modérateurs
 - Interface utilisateur moderne et responsive
 - Système de modération des soumissions
-- Base de données SQLite pour le stockage local
+- Base de données PostgreSQL pour le stockage
 
 ## Prérequis 📋
 
 - Node.js (v18 ou supérieur)
 - npm (v9 ou supérieur)
+- PostgreSQL (v14 ou supérieur)
 - Un compte Spotify (pour l'API)
+- Un compte Twitch (pour la modération)
 
 ## Installation 🚀
 
@@ -36,9 +39,10 @@ cd ../frontend
 npm install
 ```
 
-4. Initialisez la base de données :
+4. Configurez la base de données PostgreSQL :
+   - Créez un utilisateur avec le mot de passe 'root' (ou modifiez le script init-db.bat)
+   - Exécutez le script d'initialisation :
 ```bash
-cd ..
 ./init-db.bat
 ```
 
@@ -46,8 +50,27 @@ cd ..
 
 1. Dans le dossier `backend`, créez un fichier `.env` avec les variables suivantes :
 ```env
+# Database configuration
+DB_USER=root
+DB_PASSWORD=root
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=le_vinyle
+
+# Spotify configuration
 SPOTIFY_CLIENT_ID=votre_client_id
 SPOTIFY_CLIENT_SECRET=votre_client_secret
+SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+SPOTIFY_PLAYLIST_ID=votre_playlist_id
+
+# Twitch configuration
+TWITCH_CLIENT_ID=votre_client_id
+TWITCH_CLIENT_SECRET=votre_client_secret
+TWITCH_REDIRECT_URI=http://localhost:3000/api/auth/twitch/callback
+TWITCH_BROADCASTER_ID=votre_broadcaster_id
+JWT_SECRET=votre_secret_jwt
+
+# Server configuration
 PORT=3000
 ```
 
@@ -75,7 +98,8 @@ leVinyleApp/
 │   ├── controllers/   # Contrôleurs de l'API
 │   ├── models/        # Modèles de données
 │   ├── routes/        # Routes de l'API
-│   └── services/      # Services (Spotify, etc.)
+│   ├── services/      # Services (Spotify, Twitch)
+│   └── db/           # Scripts de base de données
 ├── frontend/          # Application React
 │   ├── src/
 │   │   ├── components/# Composants React
@@ -83,6 +107,21 @@ leVinyleApp/
 │   └── public/        # Fichiers publics
 └── scripts/           # Scripts utilitaires
 ```
+
+## Configuration Twitch 🔑
+
+1. Créez une application sur https://dev.twitch.tv/console
+2. Configurez l'URL de redirection OAuth : `http://localhost:3000/api/auth/twitch/callback`
+3. Ajoutez les scopes suivants :
+   - `user:read:email`
+   - `moderation:read`
+   - `channel:manage:moderators`
+
+## Configuration Spotify 🎵
+
+1. Créez une application sur https://developer.spotify.com/dashboard
+2. Configurez l'URL de redirection : `http://localhost:3000/callback`
+3. Créez une playlist et notez son ID
 
 ## Contribution 🤝
 

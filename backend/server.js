@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const SpotifyService = require('./services/spotifyService');
 const tracksRouter = require('./routes/tracks');
+const auth = require('./auth');
 
 require('dotenv').config();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 SpotifyService.initialize();
 
 // Routes
+app.use('/api/auth', auth.router);
 app.use('/api', tracksRouter);
 
 // Error handling middleware

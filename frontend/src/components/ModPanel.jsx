@@ -2,44 +2,101 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import TrackCard from './TrackCard';
 
-export default function ModPanel() {
+export default function ModPanel({ token }) {
   const [pendingTracks, setPendingTracks] = useState([]);
   const [error, setError] = useState('');
 
   const fetchPendingTracks = async () => {
+    if (!token) {
+      setError('Vous devez être connecté pour accéder au panneau de modération');
+      return;
+    }
+
     try {
-      const response = await axios.get('http://localhost:3000/api/pending');
+      const response = await axios.get('http://localhost:3000/api/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       setPendingTracks(response.data);
     } catch (err) {
-      setError('Erreur lors du chargement des morceaux en attente');
+      if (err.response?.status === 401) {
+        setError('Vous n\'êtes pas autorisé à accéder au panneau de modération');
+      } else if (err.response?.status === 403) {
+        setError('Vous devez être modérateur pour accéder à cette fonctionnalité');
+      } else {
+        setError('Erreur lors du chargement des morceaux en attente');
+      }
     }
   };
 
   useEffect(() => {
     fetchPendingTracks();
-  }, []);
+  }, [token]);
 
   const handleApprove = async (trackId) => {
+    if (!token) {
+      setError('Vous devez être connecté pour modérer les morceaux');
+      return;
+    }
+
     try {
       await axios.patch(`http://localhost:3000/api/track/${trackId}`, {
         status: 'approved'
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       fetchPendingTracks();
     } catch (err) {
-      setError('Erreur lors de l\'approbation du morceau');
+      if (err.response?.status === 401) {
+        setError('Vous n\'êtes pas autorisé à modérer les morceaux');
+      } else if (err.response?.status === 403) {
+        setError('Vous devez être modérateur pour approuver les morceaux');
+      } else {
+        setError('Erreur lors de l\'approbation du morceau');
+      }
     }
   };
 
   const handleReject = async (trackId) => {
+    if (!token) {
+      setError('Vous devez être connecté pour modérer les morceaux');
+      return;
+    }
+
     try {
       await axios.patch(`http://localhost:3000/api/track/${trackId}`, {
         status: 'rejected'
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       fetchPendingTracks();
     } catch (err) {
-      setError('Erreur lors du rejet du morceau');
+      if (err.response?.status === 401) {
+        setError('Vous n\'êtes pas autorisé à modérer les morceaux');
+      } else if (err.response?.status === 403) {
+        setError('Vous devez être modérateur pour rejeter les morceaux');
+      } else {
+        setError('Erreur lors du rejet du morceau');
+      }
     }
   };
+
+  if (!token) {
+    return (
+      <div className="w-full bg-gradient-to-br from-[#2D0036]/40 via-[#0A0A23]/40 to-[#1a1a40]/40 rounded-3xl shadow-2xl border-2 border-[#00FFD0]/20 backdrop-blur-md p-16">
+        <h2 className="text-5xl font-extrabold text-[#00FFD0] mb-16 drop-shadow-[0_0_16px_#00FFD0] tracking-wide">Panneau de modération</h2>
+        <div className="text-center text-white text-xl">
+          <p>Vous devez être connecté avec Twitch pour accéder au panneau de modération.</p>
+          <p className="mt-4">Seuls les modérateurs de la chaîne peuvent accéder à cette fonctionnalité.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full bg-gradient-to-br from-[#2D0036]/40 via-[#0A0A23]/40 to-[#1a1a40]/40 rounded-3xl shadow-2xl border-2 border-[#00FFD0]/20 backdrop-blur-md p-16">
