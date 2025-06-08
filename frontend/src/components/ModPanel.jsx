@@ -13,7 +13,7 @@ export default function ModPanel({ token }) {
     }
 
     try {
-      const response = await axios.get('http://localhost:3000/api/pending', {
+      const response = await axios.get('/api/pending', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -39,11 +39,8 @@ export default function ModPanel({ token }) {
       setError('Vous devez être connecté pour modérer les morceaux');
       return;
     }
-
     try {
-      await axios.patch(`http://localhost:3000/api/track/${trackId}`, {
-        status: 'approved'
-      }, {
+      await axios.post(`/api/track/${trackId}/approve`, {}, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -65,11 +62,8 @@ export default function ModPanel({ token }) {
       setError('Vous devez être connecté pour modérer les morceaux');
       return;
     }
-
     try {
-      await axios.patch(`http://localhost:3000/api/track/${trackId}`, {
-        status: 'rejected'
-      }, {
+      await axios.delete(`/api/track/${trackId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

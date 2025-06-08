@@ -41,7 +41,7 @@ function ModernTextarea({ label, value, onChange, ...props }) {
   );
 }
 
-export default function TrackSubmission() {
+export default function TrackSubmission({ token }) {
   const [url, setUrl] = useState('');
   const [pseudo, setPseudo] = useState('');
   const [message, setMessage] = useState('');
@@ -52,10 +52,17 @@ export default function TrackSubmission() {
     e.preventDefault();
     setSuccess(false);
     setError('');
+    if (!token) {
+      setError('Vous devez être connecté pour proposer un morceau');
+      return;
+    }
     try {
       const response = await fetch('/api/submit-track', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           spotify_url: url,
           submitted_by: pseudo,
@@ -64,7 +71,11 @@ export default function TrackSubmission() {
       });
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || 'Erreur lors de la soumission');
+        if (response.status === 401) {
+          setError('Votre session a expiré. Veuillez vous reconnecter.');
+        } else {
+          setError(data.error || 'Erreur lors de la soumission');
+        }
         setSuccess(false);
         return;
       }
@@ -73,7 +84,7 @@ export default function TrackSubmission() {
       setPseudo('');
       setMessage('');
     } catch (err) {
-      setError('Erreur réseau');
+      setError('Erreur réseau ou session expirée. Veuillez vous reconnecter.');
       setSuccess(false);
     }
   };

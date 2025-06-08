@@ -78,6 +78,37 @@ class TrackController {
       res.status(500).json({ error: 'Error updating track status' });
     }
   }
+
+  // Approuver un morceau : ajout à la playlist Spotify et update DB
+  static async approveTrack(req, res) {
+    try {
+      const { id } = req.params;
+      const track = await Track.findById(id);
+      if (!track) return res.status(404).json({ error: 'Track not found' });
+      // Extraire l'ID du morceau Spotify
+      const trackId = track.spotify_url.split('/').pop().split('?')[0];
+      await SpotifyService.addToPlaylist(trackId, process.env.SPOTIFY_PLAYLIST_ID);
+      await Track.updateStatus(id, 'approved');
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Erreur lors de l\'approbation du morceau:', error);
+      res.status(500).json({ error: 'Erreur lors de l\'approbation du morceau' });
+    }
+  }
+
+  // Supprimer un morceau
+  static async deleteTrack(req, res) {
+    try {
+      const { id } = req.params;
+      const track = await Track.findById(id);
+      if (!track) return res.status(404).json({ error: 'Track not found' });
+      await Track.delete(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Erreur lors de la suppression du morceau:', error);
+      res.status(500).json({ error: 'Erreur lors de la suppression du morceau' });
+    }
+  }
 }
 
 module.exports = TrackController; 

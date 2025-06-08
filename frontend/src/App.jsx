@@ -3,6 +3,7 @@ import TrackSubmission from './components/TrackSubmission'
 import ModPanel from './components/ModPanel'
 import Playlist from './components/Playlist'
 import VinyleLogo from './assets/VinyleLogo'
+import SpotifyLoginButton from './components/SpotifyLoginButton'
 import './App.css'
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
   }, [])
 
   const handleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/auth/twitch'
+    window.location.href = '/api/auth/twitch'
   }
 
   const handleLogout = () => {
@@ -43,15 +44,18 @@ function App() {
         {/* User menu en haut à droite */}
         <div className="absolute top-4 right-4">
           {!token ? (
-            <button
-              onClick={handleLogin}
-              className="px-6 py-2 rounded-full font-bold text-base bg-[#9146FF] text-white hover:bg-[#9146FF]/80 transition-all shadow-lg flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
-              </svg>
-              Se connecter
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleLogin}
+                className="px-6 py-2 rounded-full font-bold text-base bg-[#9146FF] text-white hover:bg-[#9146FF]/80 transition-all shadow-lg flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
+                </svg>
+                Se connecter
+              </button>
+              <SpotifyLoginButton />
+            </div>
           ) : (
             <div className="flex items-center gap-3">
               <span className="text-white font-medium">
@@ -86,24 +90,28 @@ function App() {
           >
             Proposer
           </button>
-          <button
-            onClick={() => setActiveTab('playlist')}
-            className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#FF4FAD]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#FF4FAD] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'playlist' ? 'bg-[#FF4FAD] text-white shadow-[0_0_16px_#FF4FAD] scale-105' : 'bg-[#2D0036] text-[#FF4FAD] hover:bg-[#FF4FAD]/20'}`}
-          >
-            Playlist
-          </button>
-          <button
-            onClick={() => setActiveTab('mod')}
-            className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#00FFD0]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#00FFD0] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'mod' ? 'bg-[#00FFD0] text-[#2D0036] shadow-[0_0_16px_#00FFD0] scale-105' : 'bg-[#2D0036] text-[#00FFD0] hover:bg-[#00FFD0]/20'}`}
-          >
-            Modération
-          </button>
+          {(user?.role === 'moderator' || user?.isStreamer) && (
+            <button
+              onClick={() => setActiveTab('mod')}
+              className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#00FFD0]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#00FFD0] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'mod' ? 'bg-[#00FFD0] text-[#2D0036] shadow-[0_0_16px_#00FFD0] scale-105' : 'bg-[#2D0036] text-[#00FFD0] hover:bg-[#00FFD0]/20'}`}
+            >
+              Modération
+            </button>
+          )}
+          {user?.isStreamer && (
+            <button
+              onClick={() => setActiveTab('playlist')}
+              className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#FF4FAD]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#FF4FAD] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'playlist' ? 'bg-[#FF4FAD] text-white shadow-[0_0_16px_#FF4FAD] scale-105' : 'bg-[#2D0036] text-[#FF4FAD] hover:bg-[#FF4FAD]/20'}`}
+            >
+              Playlist
+            </button>
+          )}
         </nav>
       </header>
       <main className="w-full flex flex-col items-center px-2 sm:px-4 lg:px-8 py-4 gap-8">
-        {activeTab === 'submit' && <TrackSubmission />}
-        {activeTab === 'playlist' && <Playlist />}
-        {activeTab === 'mod' && <ModPanel token={token} />}
+        {activeTab === 'submit' && <TrackSubmission token={token} />}
+        {activeTab === 'playlist' && user?.isStreamer && <Playlist token={token} user={user} />}
+        {activeTab === 'mod' && (user?.role === 'moderator' || user?.isStreamer) && <ModPanel token={token} />}
       </main>
     </div>
   )

@@ -35,6 +35,11 @@ class Track {
     const result = await db.query(query, ['approved']);
     return result.rows;
   }
+
+  static async delete(id) {
+    const query = 'DELETE FROM tracks WHERE id = $1';
+    await db.query(query, [id]);
+  }
 }
 
 module.exports = Track; 
