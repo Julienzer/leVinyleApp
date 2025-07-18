@@ -12,6 +12,7 @@ const searchRouter = require('./routes/search');
 const usersRouter = require('./routes/users');
 const playlistsRouter = require('./routes/playlists');
 const spotifyRouter = require('./routes/spotify');
+const sessionCleanupRouter = require('./routes/session-cleanup');
 
 require('dotenv').config();
 
@@ -63,6 +64,7 @@ app.use('/api/search', searchRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/playlists', playlistsRouter);
 app.use('/api/spotify', spotifyRouter);
+app.use('/api/session-cleanup', sessionCleanupRouter);
 
 // Route pour obtenir les infos de l'utilisateur connecté
 app.get('/api/me', auth.requireAuth, (req, res) => {
