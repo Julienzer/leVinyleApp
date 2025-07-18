@@ -11,18 +11,62 @@ export default function VinyleLogo({ className = "", size = 200 }) {
     >
       <defs>
         <radialGradient id="vinyleGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#CFFF04" stopOpacity="0.7" />
+          <stop offset="0%" stopColor="#DBFFA8" stopOpacity="0.7" />
           <stop offset="100%" stopColor="#2D0036" stopOpacity="0.1" />
         </radialGradient>
       </defs>
-      <circle cx="28" cy="28" r="26" fill="url(#vinyleGlow)" stroke="#CFFF04" strokeWidth="2" />
-      <circle cx="28" cy="28" r="18" fill="#18181b" stroke="#CFFF04" strokeWidth="1" />
-      <circle cx="28" cy="28" r="4" fill="#CFFF04" />
-      <circle cx="28" cy="28" r="2" fill="#2D0036" />
-      <g stroke="#CFFF04" strokeWidth="0.5">
+      
+      {/* Disque principal */}
+      <circle cx="28" cy="28" r="26" fill="url(#vinyleGlow)" stroke="#DBFFA8" strokeWidth="2" />
+      <circle cx="28" cy="28" r="18" fill="#18181b" stroke="#DBFFA8" strokeWidth="1" />
+      
+      {/* Sillons du disque */}
+      <g stroke="#DBFFA8" strokeWidth="0.5" opacity="0.6">
         <circle cx="28" cy="28" r="22" fill="none" />
+        <circle cx="28" cy="28" r="20" fill="none" />
+        <circle cx="28" cy="28" r="16" fill="none" />
         <circle cx="28" cy="28" r="14" fill="none" />
       </g>
+      
+      {/* Éléments asymétriques pour créer l'effet de rotation */}
+      <g fill="#DBFFA8" opacity="0.4">
+        {/* Points texturés sur le disque */}
+        <circle cx="35" cy="20" r="0.5" />
+        <circle cx="42" cy="28" r="0.3" />
+        <circle cx="38" cy="35" r="0.4" />
+        <circle cx="20" cy="35" r="0.3" />
+        <circle cx="15" cy="25" r="0.4" />
+        <circle cx="18" cy="18" r="0.3" />
+        <circle cx="32" cy="15" r="0.4" />
+        <circle cx="25" cy="40" r="0.3" />
+        
+        {/* Points plus petits pour plus de texture */}
+        <circle cx="40" cy="23" r="0.2" />
+        <circle cx="33" cy="38" r="0.2" />
+        <circle cx="22" cy="16" r="0.2" />
+        <circle cx="16" cy="32" r="0.2" />
+      </g>
+      
+      {/* Lignes courbes simulant les sillons */}
+      <g stroke="#DBFFA8" strokeWidth="0.3" opacity="0.3" fill="none">
+        <path d="M 35 12 Q 42 20 45 28 Q 42 36 35 44" />
+        <path d="M 12 20 Q 15 28 12 36" />
+        <path d="M 20 10 Q 30 15 40 12" />
+        <path d="M 16 44 Q 28 40 40 44" />
+      </g>
+      
+      {/* Reflet asymétrique */}
+      <g fill="#DBFFA8" opacity="0.2">
+        <ellipse cx="35" cy="22" rx="3" ry="8" transform="rotate(45 35 22)" />
+      </g>
+      
+      {/* Centre du disque */}
+      <circle cx="28" cy="28" r="4" fill="#DBFFA8" />
+      <circle cx="28" cy="28" r="2" fill="#2D0036" />
+      
+      {/* Petite marque sur le centre pour voir la rotation */}
+      <circle cx="30" cy="28" r="0.5" fill="#DBFFA8" />
+      
       <style>{`
         @keyframes spin {
           100% { transform: rotate(360deg); }

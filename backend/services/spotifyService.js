@@ -37,6 +37,41 @@ class SpotifyService {
     }
   }
 
+  // Recherche des morceaux sur Spotify
+  static async searchTracks(query, limit = 20) {
+    try {
+      console.log('🔍 Searching Spotify for:', query);
+      const searchResults = await spotifyApi.searchTracks(query, { limit });
+      const tracks = searchResults.body.tracks.items;
+      
+      // Formater les résultats pour le frontend
+      const formattedResults = tracks.map(track => ({
+        id: track.id,
+        name: track.name,
+        artist: track.artists.map(a => a.name).join(', '),
+        album: track.album.name,
+        duration: this.formatDuration(track.duration_ms),
+        spotify_url: track.external_urls.spotify,
+        preview_url: track.preview_url,
+        image: track.album.images[0]?.url || null,
+        popularity: track.popularity
+      }));
+
+      console.log('✅ Found', formattedResults.length, 'tracks');
+      return formattedResults;
+    } catch (error) {
+      console.error('Error searching Spotify tracks:', error);
+      throw new Error('Erreur lors de la recherche Spotify');
+    }
+  }
+
+  // Utilitaire pour formater la durée
+  static formatDuration(durationMs) {
+    const minutes = Math.floor(durationMs / 60000);
+    const seconds = Math.floor((durationMs % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
   // Ajoute un morceau à la playlist Spotify avec le token utilisateur
   static async addToPlaylist(trackId, playlistId) {
     console.log('Adding track to playlist:', { trackId, playlistId });

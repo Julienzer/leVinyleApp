@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply min-h-screen text-white;
-    background: linear-gradient(135deg, #2D0036 0%, #0A0A23 50%, #1a1a40 100%) !important;
+  html, body {
+    @apply m-0 p-0 min-h-screen text-white;
+    background: linear-gradient(135deg, #2D0036 0%, #3D1A4B 50%, #2D0036 100%);
   }
 }
 

@@ -1,12 +1,21 @@
 {
-  "name": "streamselect-backend",
+  "name": "le-vinyle-backend",
   "version": "1.0.0",
-  "description": "Backend for StreamSelect application",
+  "description": "Backend for Le Vinyle - Musical session management application",
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "setup-db": "node scripts/setup-database.js",
+    "setup-playlists": "node scripts/setup-playlists.js",
+    "clean-db": "node scripts/clean-database.js",
+    "fix-permissions": "node scripts/fix-permissions.js",
+    "diagnose": "node scripts/diagnose.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": ["music", "twitch", "spotify", "streaming", "session"],
+  "author": "Le Vinyle Team",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.9.0",
     "cors": "^2.8.5",

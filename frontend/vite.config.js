@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import fs from 'fs'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -9,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://localhost:3000',
+        target: 'http://localhost:3000',  // Changé de https à http
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '/api'),
@@ -26,9 +25,6 @@ export default defineConfig({
         }
       },
     },
-    https: {
-      key: fs.readFileSync('../backend/localhost-key.pem'),
-      cert: fs.readFileSync('../backend/localhost-cert.pem'),
-    }
+    // Configuration HTTPS supprimée
   },
 })

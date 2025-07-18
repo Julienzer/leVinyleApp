@@ -1,71 +1,238 @@
 import { useState, useEffect } from 'react'
-import TrackSubmission from './components/TrackSubmission'
-import ModPanel from './components/ModPanel'
-import Playlist from './components/Playlist'
-import VinyleLogo from './assets/VinyleLogo'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import HomePage from './components/HomePage'
+import SessionRoom from './components/SessionRoom'
 import SpotifyLoginButton from './components/SpotifyLoginButton'
+import TestControls from './components/TestControls'
+import Avatar from './components/Avatar'
+import DebugPanel from './components/DebugPanel'
+import SpotifyTest from './components/SpotifyTest'
+import { fakeUsers } from './utils/fakeData'
 import './App.css'
+import './utils/spotifyDebug.js'
+
+// Variable d'environnement pour activer/désactiver le mode test
+// En production, le mode test est automatiquement désactivé
+const isTestMode = import.meta.env.MODE === 'development' && import.meta.env.VITE_TEST_MODE === 'true'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('submit')
   const [token, setToken] = useState(null)
   const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [notification, setNotification] = useState(null)
+  const [spotifyRefreshKey, setSpotifyRefreshKey] = useState(0)
 
   useEffect(() => {
-    // Récupère le token depuis l'URL si présent
-    const params = new URLSearchParams(window.location.search)
-    const tokenFromUrl = params.get('token')
-    if (tokenFromUrl) {
-      setToken(tokenFromUrl)
-      // Décode le token pour obtenir les infos utilisateur
-      try {
-        const payload = JSON.parse(atob(tokenFromUrl.split('.')[1]))
-        setUser(payload)
-      } catch (e) {
-        console.error('Error decoding token:', e)
+    if (isTestMode) {
+      // En mode test, commencer avec un utilisateur viewer par défaut
+      setUser(fakeUsers.viewer)
+      setToken('fake-token-123')
+      setLoading(false)
+    } else {
+      // Mode production normal
+      const params = new URLSearchParams(window.location.search)
+      const tokenFromUrl = params.get('token')
+      const spotifySuccess = params.get('spotify_success')
+      const spotifyError = params.get('spotify_error')
+      const spotifyUser = params.get('spotify_user')
+      
+      // Gérer l'authentification Twitch
+      if (tokenFromUrl) {
+        console.log('🔐 Token reçu depuis URL:', tokenFromUrl.substring(0, 20) + '...')
+        setToken(tokenFromUrl)
+        localStorage.setItem('token', tokenFromUrl)
+        try {
+          const payload = JSON.parse(atob(tokenFromUrl.split('.')[1]))
+          setUser(payload)
+          localStorage.setItem('user', JSON.stringify(payload))
+          console.log('✅ Utilisateur connecté:', payload.display_name)
+        } catch (e) {
+          console.error('Error decoding token:', e)
+        }
+        // Nettoyer l'URL après avoir récupéré le token
+        window.history.replaceState({}, document.title, window.location.pathname)
+      } else {
+        // Essayer de récupérer le token depuis localStorage
+        const storedToken = localStorage.getItem('token')
+        const storedUser = localStorage.getItem('user')
+        
+        if (storedToken && storedUser) {
+          console.log('🔐 Token récupéré depuis localStorage')
+          setToken(storedToken)
+          try {
+            const userData = JSON.parse(storedUser)
+            setUser(userData)
+            console.log('✅ Utilisateur restauré:', userData.display_name)
+          } catch (e) {
+            console.error('Error parsing stored user:', e)
+            // Nettoyer le localStorage si les données sont corrompues
+            localStorage.removeItem('token')
+            localStorage.removeItem('user')
+          }
+        }
       }
-      // Nettoie l'URL
-      window.history.replaceState({}, document.title, window.location.pathname)
+
+      // Gérer le retour de l'authentification Spotify
+      if (spotifySuccess === 'true') {
+        setNotification({
+          type: 'success',
+          message: `Spotify connecté avec succès !${spotifyUser ? ` (${decodeURIComponent(spotifyUser)})` : ''}`
+        })
+        // Déclencher un rafraîchissement du bouton Spotify
+        setSpotifyRefreshKey(prev => prev + 1)
+      } else if (spotifyError) {
+        setNotification({
+          type: 'error',
+          message: `Erreur Spotify : ${decodeURIComponent(spotifyError)}`
+        })
+      }
+
+      // Nettoyer l'URL
+      if (tokenFromUrl || spotifySuccess || spotifyError) {
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+      
+      setLoading(false)
     }
   }, [])
 
+  // Auto-hide notification after 5 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [notification])
+
   const handleLogin = () => {
-    window.location.href = '/api/auth/twitch'
+    if (isTestMode) {
+      // En mode test, simuler la connexion
+      setUser(fakeUsers.viewer)
+      setToken('fake-token-123')
+    } else {
+      // Rediriger vers l'authentification Twitch du backend
+      window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/twitch`
+    }
   }
 
   const handleLogout = () => {
+    console.log('🔐 Déconnexion...')
+    if (!isTestMode) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    }
     setToken(null)
     setUser(null)
+    setNotification({
+      type: 'success',
+      message: 'Déconnecté avec succès'
+    })
+  }
+
+  const handleTestUserChange = (newUser) => {
+    setUser(newUser)
+    setToken(newUser ? 'fake-token-123' : null)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-[#2D0036] via-[#3D1A4B] to-[#2D0036] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#DBFFA8] mx-auto mb-4"></div>
+          <p className="text-white text-lg">Chargement...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center">
-      <header className="py-4 w-full flex flex-col items-center relative">
-        {/* User menu en haut à droite */}
-        <div className="absolute top-4 right-4">
+    <Router>
+      <div className="min-h-screen w-full bg-gradient-to-br from-[#2D0036] via-[#3D1A4B] to-[#2D0036]">
+        {/* Notification Toast */}
+        {notification && (
+          <div className="fixed top-4 right-4 z-50 max-w-sm">
+            <div className={`rounded-lg p-4 shadow-lg ${
+              notification.type === 'success' 
+                ? 'bg-green-600 text-white' 
+                : 'bg-red-600 text-white'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="mr-3">
+                    {notification.type === 'success' ? (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium">{notification.message}</p>
+                </div>
+                <button
+                  onClick={() => setNotification(null)}
+                  className="ml-4 text-white hover:text-gray-200 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Header global avec authentification */}
+        <div className="absolute top-6 right-6 flex gap-3 z-40">
+          {/* Lien debug (uniquement en développement) */}
+          {import.meta.env.MODE === 'development' && (
+            <a
+              href="/debug"
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors"
+            >
+              🔧 Debug
+            </a>
+          )}
           {!token ? (
-            <div className="flex gap-2">
+            <>
               <button
                 onClick={handleLogin}
-                className="px-6 py-2 rounded-full font-bold text-base bg-[#9146FF] text-white hover:bg-[#9146FF]/80 transition-all shadow-lg flex items-center gap-2"
+                className="px-6 py-3 rounded-full font-bold text-base bg-[#9146FF] text-white hover:bg-[#9146FF]/80 transition-all shadow-lg flex items-center gap-2"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
                 </svg>
                 Se connecter
               </button>
-              <SpotifyLoginButton />
-            </div>
+              {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
+            </>
           ) : (
-            <div className="flex items-center gap-3">
-              <span className="text-white font-medium">
-                {user?.display_name}
-                {user?.role === 'moderator' && (
-                  <span className="ml-2 px-2 py-0.5 text-xs bg-[#00FFD0] text-[#2D0036] rounded-full">
-                    Modo
+                          <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 bg-[#9146FF]/20 px-3 py-2 rounded-full">
+                  <Avatar 
+                    src={user?.profile_picture} 
+                    alt={user?.display_name}
+                    size="md"
+                  />
+                  <span className="text-white font-medium">
+                    {user?.display_name}
+                    {user?.role === 'moderator' && (
+                      <span className="ml-2 px-2 py-0.5 text-xs bg-[#00FFD0] text-[#2D0036] rounded-full">
+                        Modo
+                      </span>
+                    )}
+                    {user?.isStreamer && (
+                      <span className="ml-2 px-2 py-0.5 text-xs bg-[#FF4FAD] text-white rounded-full">
+                        Streamer
+                      </span>
+                    )}
                   </span>
-                )}
-              </span>
+                </div>
+              {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-full bg-red-500/20 hover:bg-red-500/30 transition-all text-red-500"
@@ -79,41 +246,46 @@ function App() {
           )}
         </div>
 
-        <VinyleLogo className="h-20 w-20 flex-shrink-0 hover:scale-110 transition-transform duration-300 mb-1" />
-        <h1 className="text-3xl md:text-5xl font-extrabold text-[#CFFF04] tracking-widest drop-shadow-[0_0_16px_#CFFF04] font-mono select-none text-center mb-2">
-          LE VINYLE
-        </h1>
-        <nav className="flex flex-col md:flex-row gap-3 md:gap-6 justify-center items-center w-full">
-          <button
-            onClick={() => setActiveTab('submit')}
-            className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#CFFF04]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#CFFF04] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'submit' ? 'bg-[#CFFF04] text-[#2D0036] shadow-[0_0_16px_#CFFF04] scale-105' : 'bg-[#2D0036] text-[#CFFF04] hover:bg-[#CFFF04]/20'}`}
-          >
-            Proposer
-          </button>
-          {(user?.role === 'moderator' || user?.isStreamer) && (
-            <button
-              onClick={() => setActiveTab('mod')}
-              className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#00FFD0]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#00FFD0] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'mod' ? 'bg-[#00FFD0] text-[#2D0036] shadow-[0_0_16px_#00FFD0] scale-105' : 'bg-[#2D0036] text-[#00FFD0] hover:bg-[#00FFD0]/20'}`}
-            >
-              Modération
-            </button>
+        {/* Contrôles de test (uniquement en mode test) */}
+        {isTestMode && (
+          <TestControls 
+            currentUser={user} 
+            onUserChange={handleTestUserChange}
+          />
+        )}
+
+        {/* Routes principales */}
+        <Routes>
+          <Route 
+            path="/" 
+            element={<HomePage user={user} token={token} isTestMode={isTestMode} />} 
+          />
+          
+          <Route 
+            path="/room/:sessionCode" 
+            element={<SessionRoom user={user} token={token} isTestMode={isTestMode} />} 
+          />
+          
+          {/* Route de debug (uniquement en développement) */}
+          {import.meta.env.MODE === 'development' && (
+            <Route 
+              path="/debug" 
+              element={<DebugPanel />} 
+            />
           )}
-          {user?.isStreamer && (
-            <button
-              onClick={() => setActiveTab('playlist')}
-              className={`px-6 py-2 rounded-full font-bold text-base md:text-lg transition-all shadow-lg border-2 border-[#FF4FAD]/40 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#FF4FAD] focus:ring-offset-2 focus:ring-offset-[#1a1a40] ${activeTab === 'playlist' ? 'bg-[#FF4FAD] text-white shadow-[0_0_16px_#FF4FAD] scale-105' : 'bg-[#2D0036] text-[#FF4FAD] hover:bg-[#FF4FAD]/20'}`}
-            >
-              Playlist
-            </button>
+          
+          {/* Route de test Spotify (uniquement en développement) */}
+          {import.meta.env.MODE === 'development' && (
+            <Route 
+              path="/spotify-test" 
+              element={<SpotifyTest />} 
+            />
           )}
-        </nav>
-      </header>
-      <main className="w-full flex flex-col items-center px-2 sm:px-4 lg:px-8 py-4 gap-8">
-        {activeTab === 'submit' && <TrackSubmission token={token} />}
-        {activeTab === 'playlist' && user?.isStreamer && <Playlist token={token} user={user} />}
-        {activeTab === 'mod' && (user?.role === 'moderator' || user?.isStreamer) && <ModPanel token={token} />}
-      </main>
-    </div>
+          
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </Router>
   )
 }
 
