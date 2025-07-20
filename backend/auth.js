@@ -208,7 +208,9 @@ router.get('/spotify/callback', async (req, res) => {
   
   if (error) {
     console.error('❌ Spotify auth error:', error);
-    return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(error)}`);
+    // S'assurer que l'erreur est une chaîne de caractères
+    const errorMessage = typeof error === 'string' ? error : 'Erreur d\'authentification Spotify';
+    return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`);
   }
 
   if (!code) {
