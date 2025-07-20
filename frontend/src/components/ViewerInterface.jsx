@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { mockApiResponses } from '../utils/fakeData'
+import { api } from '../utils/api'
 
 export default function ViewerInterface({ session, user, token, isTestMode }) {
   const [searchQuery, setSearchQuery] = useState('')
