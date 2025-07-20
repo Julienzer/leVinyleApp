@@ -208,8 +208,13 @@ router.get('/spotify/callback', async (req, res) => {
   
   if (error) {
     console.error('❌ Spotify auth error:', error);
+    console.error('❌ Error type:', typeof error);
+    console.error('❌ Error JSON stringify:', JSON.stringify(error));
+    
     // S'assurer que l'erreur est une chaîne de caractères
     const errorMessage = typeof error === 'string' ? error : 'Erreur d\'authentification Spotify';
+    console.log('✅ Error message after conversion:', errorMessage);
+    
     return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`);
   }
 
@@ -266,6 +271,9 @@ router.get('/spotify/callback', async (req, res) => {
         return res.redirect(`${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=true`);
       } catch (dbError) {
         console.error('❌ Erreur lors de la liaison avec le compte Twitch:', dbError);
+        console.error('❌ dbError type:', typeof dbError);
+        console.error('❌ dbError JSON stringify:', JSON.stringify(dbError));
+        
         // Continuer sans lier - l'utilisateur pourra réessayer
       }
     }
@@ -276,6 +284,8 @@ router.get('/spotify/callback', async (req, res) => {
     
   } catch (err) {
     console.error('❌ Erreur OAuth Spotify:', err);
+    console.error('❌ Error type:', typeof err);
+    console.error('❌ Error JSON stringify:', JSON.stringify(err));
     
     // Gestion intelligente du message d'erreur
     let errorMessage = 'Erreur d\'authentification Spotify';
@@ -291,6 +301,8 @@ router.get('/spotify/callback', async (req, res) => {
     }
     
     console.log('📝 Message d\'erreur formaté:', errorMessage);
+    console.log('📝 Type du message d\'erreur formaté:', typeof errorMessage);
+    
     res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`);
   }
 });
