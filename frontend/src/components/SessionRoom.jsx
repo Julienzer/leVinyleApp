@@ -6,6 +6,7 @@ import StreamerInterface from './StreamerInterface'
 import VinyleLogo from '../assets/VinyleLogo'
 import RoleDebugger from './RoleDebugger'
 import { mockApiResponses } from '../utils/fakeData'
+import { api } from '../utils/api'
 import '../utils/testModeration.js'
 
 export default function SessionRoom({ user, token, isTestMode }) {
@@ -30,9 +31,7 @@ export default function SessionRoom({ user, token, isTestMode }) {
         sessionData = response.session
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${sessionCode}`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        })
+        const response = await api.get(`/api/sessions/${sessionCode}`, token)
 
         if (!response.ok) {
           if (response.status === 404) {

@@ -75,9 +75,7 @@ export default function ViewerInterface({ session, user, token, isTestMode }) {
         setMyPropositions(response.propositions)
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/my-propositions`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await api.get(`/api/sessions/${session.id}/my-propositions`, token)
         
         if (response.ok) {
           const data = await response.json()
@@ -113,9 +111,7 @@ export default function ViewerInterface({ session, user, token, isTestMode }) {
         setSearchResults(filtered)
       } else {
         // En mode production, utiliser la vraie API Spotify
-        const response = await fetch(`/api/search/tracks?q=${encodeURIComponent(query)}&limit=20`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        })
+        const response = await api.get(`/api/search/tracks?q=${encodeURIComponent(query)}&limit=20`, token)
         
         if (response.ok) {
           const data = await response.json()
@@ -192,18 +188,11 @@ export default function ViewerInterface({ session, user, token, isTestMode }) {
         })
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/propositions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            spotify_url: url,
-            track_name: trackName,
-            message: message.trim()
-          })
-        })
+        const response = await api.post(`/api/sessions/${session.id}/propositions`, {
+          spotify_url: url,
+          track_name: trackName,
+          message: message.trim()
+        }, token)
 
         if (!response.ok) {
           const data = await response.json()

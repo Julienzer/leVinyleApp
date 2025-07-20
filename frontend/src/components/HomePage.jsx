@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import VinyleLogo from '../assets/VinyleLogo'
 import { mockApiResponses } from '../utils/fakeData'
+import { api } from '../utils/api'
 
 export default function HomePage({ user, token, isTestMode }) {
   const [sessionCode, setSessionCode] = useState('')
@@ -40,19 +41,12 @@ export default function HomePage({ user, token, isTestMode }) {
         navigate(`/room/${response.session.code}`)
       } else {
         // Utiliser les vraies API en mode production
-        const httpResponse = await fetch('/api/sessions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            name: sessionName,
-            isPrivate,
-            preventDuplicates,
-            queueMode
-          })
-        })
+        const httpResponse = await api.post('/api/sessions', {
+          name: sessionName,
+          isPrivate,
+          preventDuplicates,
+          queueMode
+        }, token)
 
         if (!httpResponse.ok) {
           const data = await httpResponse.json()

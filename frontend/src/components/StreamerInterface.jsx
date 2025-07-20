@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CheckIcon, XMarkIcon, ArrowPathIcon, MusicalNoteIcon } from '@heroicons/react/24/outline'
 import { mockApiResponses } from '../utils/fakeData'
+import { api } from '../utils/api'
 import SpotifyPlayer from './SpotifyFallback'
 import SpotifyPlaylistManager from './SpotifyPlaylistManager'
 
@@ -46,9 +47,7 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
         console.log('✅ Morceaux approuvés récupérés (test):', response.propositions.length)
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/propositions/approved`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await api.get(`/api/sessions/${session.id}/propositions/approved`, token)
         
         console.log('📡 Réponse API approved:', response.status, response.ok)
         
@@ -77,9 +76,7 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
         console.log('✅ Propositions en attente récupérées (test):', response.propositions.length)
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/propositions/pending`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await api.get(`/api/sessions/${session.id}/propositions/pending`, token)
         
         console.log('📡 Réponse API pending:', response.status, response.ok)
         
@@ -106,9 +103,7 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
         setSessionStats(response.stats)
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await api.get(`/api/sessions/${session.id}/stats`, token)
         
         if (response.ok) {
           const data = await response.json()

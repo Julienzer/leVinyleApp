@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { CheckIcon, XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { mockApiResponses } from '../utils/fakeData'
+import { api } from '../utils/api'
 import SpotifyPlayer from './SpotifyFallback'
 
 export default function ModeratorInterface({ session, user, token, isTestMode }) {
@@ -23,9 +24,7 @@ export default function ModeratorInterface({ session, user, token, isTestMode })
         setPendingPropositions(response.propositions)
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/propositions/pending`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await api.get(`/api/sessions/${session.id}/propositions/pending`, token)
         
         if (response.ok) {
           const data = await response.json()
