@@ -308,6 +308,66 @@ router.get('/spotify', (req, res) => {
   res.redirect(url.toString());
 });
 
+// Fonction utilitaire pour convertir n'importe quelle erreur en string lisible
+function safeErrorToString(error, defaultMessage = 'Erreur inconnue') {
+  console.log('🔧 [Backend] === CONVERSION ERREUR SÉCURISÉE ===');
+  console.log('🔧 [Backend] Type erreur reçu:', typeof error);
+  console.log('🔧 [Backend] Erreur brute:', error);
+  
+  // Si c'est déjà une string, la retourner
+  if (typeof error === 'string' && error.trim().length > 0) {
+    console.log('✅ [Backend] Erreur déjà string:', error);
+    return error;
+  }
+  
+  // Si c'est un objet avec message
+  if (error && typeof error === 'object') {
+    console.log('🔍 [Backend] Analyse objet erreur...');
+    
+    // Essayer error.message
+    if (error.message && typeof error.message === 'string') {
+      console.log('✅ [Backend] Message extrait:', error.message);
+      return error.message;
+    }
+    
+    // Essayer error.error (pour les erreurs Spotify)
+    if (error.error && typeof error.error === 'string') {
+      console.log('✅ [Backend] Error.error extrait:', error.error);
+      return error.error;
+    }
+    
+    // Essayer error.error_description (pour OAuth)
+    if (error.error_description && typeof error.error_description === 'string') {
+      console.log('✅ [Backend] Error_description extrait:', error.error_description);
+      return error.error_description;
+    }
+    
+    // Si l'objet a une méthode toString personnalisée
+    if (error.toString && typeof error.toString === 'function') {
+      const toStringResult = error.toString();
+      if (toStringResult !== '[object Object]' && toStringResult !== 'Error') {
+        console.log('✅ [Backend] ToString utilisé:', toStringResult);
+        return toStringResult;
+      }
+    }
+    
+    // Essayer JSON.stringify comme dernier recours
+    try {
+      const jsonString = JSON.stringify(error);
+      if (jsonString && jsonString !== '{}' && jsonString !== 'null') {
+        console.log('✅ [Backend] JSON stringify utilisé:', jsonString);
+        return `Erreur: ${jsonString}`;
+      }
+    } catch (jsonError) {
+      console.log('⚠️ [Backend] Impossible de stringify l\'erreur');
+    }
+  }
+  
+  // Fallback absolu
+  console.log('🔧 [Backend] Utilisation message par défaut:', defaultMessage);
+  return defaultMessage;
+}
+
 router.get('/spotify/callback', async (req, res) => {
   console.log('🔄 [Backend] === DÉBUT CALLBACK SPOTIFY ===');
   console.log('🔄 [Backend] Timestamp:', new Date().toISOString());
@@ -328,19 +388,21 @@ router.get('/spotify/callback', async (req, res) => {
   console.log('🔍 [Backend] Code (tronqué):', code ? `${code.substring(0, 30)}...` : 'absent');
   console.log('🔍 [Backend] Error présent:', !!error);
   console.log('🔍 [Backend] Error valeur:', error);
+  console.log('🔍 [Backend] Error type:', typeof error);
   console.log('🔍 [Backend] State présent:', !!state);
   console.log('🔍 [Backend] State (tronqué):', state ? `${state.substring(0, 30)}...` : 'absent');
   console.log('🔍 [Backend] Frontend URL:', frontendUrl);
   
   if (error) {
     console.error('❌ [Backend] === ERREUR SPOTIFY OAUTH ===');
-    console.error('❌ [Backend] Erreur Spotify:', error);
+    console.error('❌ [Backend] Erreur Spotify brute:', error);
     console.error('❌ [Backend] Type erreur:', typeof error);
     console.error('❌ [Backend] Erreur stringifiée:', JSON.stringify(error));
     
-    // S'assurer que l'erreur est une chaîne de caractères
-    const errorMessage = typeof error === 'string' ? error : 'Erreur d\'authentification Spotify';
-    console.log('✅ [Backend] Message d\'erreur converti:', errorMessage);
+    // Utiliser la fonction de conversion sécurisée
+    const errorMessage = safeErrorToString(error, 'Erreur d\'authentification Spotify');
+    console.log('✅ [Backend] Message d\'erreur converti final:', errorMessage);
+    console.log('✅ [Backend] Type du message final:', typeof errorMessage);
     
     const errorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`;
     console.error('❌ [Backend] Redirection vers erreur:', errorUrl);
@@ -518,24 +580,9 @@ router.get('/spotify/callback', async (req, res) => {
       console.error('❌ [Backend] Body erreur Spotify:', err.body);
     }
     
-    // Gestion intelligente du message d'erreur
-    let errorMessage = 'Erreur d\'authentification Spotify';
-    
-    if (typeof err === 'string') {
-      errorMessage = err;
-      console.log('📝 [Backend] Erreur string directe:', errorMessage);
-    } else if (err && err.message) {
-      errorMessage = err.message;
-      console.log('📝 [Backend] Message d\'erreur extrait:', errorMessage);
-    } else if (err && err.body && err.body.error_description) {
-      errorMessage = err.body.error_description;
-      console.log('📝 [Backend] Description erreur Spotify:', errorMessage);
-    } else if (err && err.statusCode) {
-      errorMessage = `Erreur Spotify ${err.statusCode}`;
-      console.log('📝 [Backend] Erreur avec code statut:', errorMessage);
-    }
-    
-    console.log('📝 [Backend] Message d\'erreur final:', errorMessage);
+    // Utiliser la fonction de conversion sécurisée pour toutes les erreurs
+    const errorMessage = safeErrorToString(err, 'Erreur lors de l\'authentification Spotify');
+    console.log('📝 [Backend] Message d\'erreur final après conversion:', errorMessage);
     console.log('📝 [Backend] Type du message final:', typeof errorMessage);
     
     const finalErrorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`;
@@ -932,6 +979,150 @@ router.get('/debug/twitch-api/:streamerId', async (req, res) => {
       data: error.response?.data
     });
   }
+});
+
+// ===== ENDPOINT DEBUG SPOTIFY =====
+router.get('/debug/spotify', (req, res) => {
+  console.log('🔧 [Backend] === DEBUG SPOTIFY ===');
+  
+  const config = {
+    clientId: process.env.SPOTIFY_CLIENT_ID,
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI,
+    frontendUrl: process.env.FRONTEND_URL
+  };
+  
+  const configStatus = {
+    hasClientId: !!config.clientId,
+    hasClientSecret: !!config.clientSecret,
+    hasRedirectUri: !!config.redirectUri,
+    hasFrontendUrl: !!config.frontendUrl,
+    clientIdLength: config.clientId ? config.clientId.length : 0,
+    redirectUriValid: config.redirectUri ? config.redirectUri.includes('callback') : false
+  };
+  
+  console.log('🔧 [Backend] Configuration Spotify:', {
+    ...configStatus,
+    clientIdPreview: config.clientId ? `${config.clientId.substring(0, 10)}...` : 'MANQUANT',
+    redirectUri: config.redirectUri,
+    frontendUrl: config.frontendUrl
+  });
+  
+  // Test de l'API Spotify
+  let spotifyApiStatus = 'non-testé';
+  try {
+    const SpotifyWebApi = require('spotify-web-api-node');
+    const spotifyApi = new SpotifyWebApi({
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      redirectUri: config.redirectUri,
+    });
+    spotifyApiStatus = 'configuré';
+  } catch (error) {
+    spotifyApiStatus = `erreur: ${error.message}`;
+  }
+  
+  const debugInfo = {
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    ...configStatus,
+    spotifyApiStatus,
+    urls: {
+      authUrl: config.clientId ? `https://accounts.spotify.com/authorize?client_id=${config.clientId}` : 'impossible - pas de client_id',
+      callbackUrl: config.redirectUri || 'non configuré',
+      frontendUrl: config.frontendUrl || 'non configuré'
+    },
+    recommendations: []
+  };
+  
+  // Recommandations
+  if (!config.clientId) {
+    debugInfo.recommendations.push('Ajouter SPOTIFY_CLIENT_ID dans .env');
+  }
+  if (!config.clientSecret) {
+    debugInfo.recommendations.push('Ajouter SPOTIFY_CLIENT_SECRET dans .env');
+  }
+  if (!config.redirectUri) {
+    debugInfo.recommendations.push('Ajouter SPOTIFY_REDIRECT_URI dans .env');
+  }
+  if (!config.frontendUrl) {
+    debugInfo.recommendations.push('Ajouter FRONTEND_URL dans .env');
+  }
+  if (config.redirectUri && !config.redirectUri.includes('callback')) {
+    debugInfo.recommendations.push('SPOTIFY_REDIRECT_URI doit finir par /callback');
+  }
+  
+  res.json({
+    success: true,
+    debug: debugInfo
+  });
+});
+
+// ===== ENDPOINT TEST TOKEN =====
+router.get('/debug/test-token', (req, res) => {
+  console.log('🔧 [Backend] === TEST TOKEN ===');
+  
+  const authHeader = req.headers.authorization;
+  const tokenFromQuery = req.query.token;
+  
+  const testResults = {
+    timestamp: new Date().toISOString(),
+    headers: {
+      hasAuthHeader: !!authHeader,
+      authHeaderPreview: authHeader ? `${authHeader.substring(0, 20)}...` : null
+    },
+    query: {
+      hasTokenParam: !!tokenFromQuery,
+      tokenParamPreview: tokenFromQuery ? `${tokenFromQuery.substring(0, 20)}...` : null
+    },
+    tokenTests: []
+  };
+  
+  // Test du token dans les headers
+  if (authHeader) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      testResults.tokenTests.push({
+        source: 'headers',
+        status: 'valide',
+        userId: payload.id,
+        displayName: payload.display_name,
+        expiresAt: new Date(payload.exp * 1000).toISOString()
+      });
+    } catch (error) {
+      testResults.tokenTests.push({
+        source: 'headers',
+        status: 'invalide',
+        error: error.message
+      });
+    }
+  }
+  
+  // Test du token dans query params
+  if (tokenFromQuery) {
+    try {
+      const payload = jwt.verify(tokenFromQuery, process.env.JWT_SECRET);
+      testResults.tokenTests.push({
+        source: 'query',
+        status: 'valide',
+        userId: payload.id,
+        displayName: payload.display_name,
+        expiresAt: new Date(payload.exp * 1000).toISOString()
+      });
+    } catch (error) {
+      testResults.tokenTests.push({
+        source: 'query',
+        status: 'invalide',
+        error: error.message
+      });
+    }
+  }
+  
+  res.json({
+    success: true,
+    test: testResults
+  });
 });
 
 // Les exports se font dans l'objet final en bas du fichier

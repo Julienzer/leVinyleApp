@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Test Debug Spotify - Le Vinyle</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        }
+        .button {
+            background: #1db954;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 10px 5px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        .button:hover {
+            background: #1aa34a;
+            transform: translateY(-2px);
+        }
+        .debug-section {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid #1db954;
+        }
+        .result {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .error { border-left-color: #ff4444; }
+        .success { border-left-color: #44ff44; }
+        .warning { border-left-color: #ffaa44; }
+        h1, h2 { margin-bottom: 20px; }
+        .emoji { font-size: 24px; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="emoji">🔧</span>Debug Spotify - Le Vinyle</h1>
+        
+        <div class="debug-section">
+            <h2><span class="emoji">🌐</span>Configuration Backend</h2>
+            <button class="button" onclick="testBackendConfig()">Tester Config Backend</button>
+            <button class="button" onclick="testSpotifyEndpoint()">Tester Endpoint Spotify</button>
+            <div id="backend-result" class="result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h2><span class="emoji">🎵</span>Test Token Twitch</h2>
+            <button class="button" onclick="testTwitchToken()">Tester Token Stocké</button>
+            <button class="button" onclick="simulateSpotifyFlow()">Simuler Flow Spotify</button>
+            <div id="token-result" class="result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h2><span class="emoji">📊</span>Analyse URL</h2>
+            <button class="button" onclick="analyzeCurrentUrl()">Analyser URL Actuelle</button>
+            <button class="button" onclick="simulateErrorUrl()">Simuler URL d'Erreur</button>
+            <div id="url-result" class="result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h2><span class="emoji">🔍</span>LocalStorage</h2>
+            <button class="button" onclick="checkLocalStorage()">Vérifier LocalStorage</button>
+            <button class="button" onclick="clearSpotifyData()">Nettoyer Données Spotify</button>
+            <div id="storage-result" class="result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h2><span class="emoji">🚀</span>Tests de Connectivité</h2>
+            <button class="button" onclick="testSpotifyAPI()">Tester API Spotify</button>
+            <button class="button" onclick="testCORS()">Tester CORS</button>
+            <div id="connectivity-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://levinyle-backend.onrender.com/api/auth';
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : '🔍';
+            console.log(`${prefix} [${timestamp}] ${message}`);
+            return `${prefix} [${timestamp}] ${message}`;
+        }
+
+        async function testBackendConfig() {
+            const resultDiv = document.getElementById('backend-result');
+            resultDiv.innerHTML = log('Test de la configuration backend...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/debug/spotify`);
+                const data = await response.json();
+                
+                let result = log('Configuration Backend:', 'success') + '\n';
+                result += JSON.stringify(data, null, 2);
+                
+                resultDiv.innerHTML = `<pre>${result}</pre>`;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                const errorMsg = log(`Erreur: ${error.message}`, 'error');
+                resultDiv.innerHTML = errorMsg;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testSpotifyEndpoint() {
+            const resultDiv = document.getElementById('backend-result');
+            
+            // Récupérer le token Twitch depuis localStorage
+            const token = localStorage.getItem('token');
+            if (!token) {
+                resultDiv.innerHTML = log('Aucun token Twitch trouvé - connectez-vous d\'abord à Twitch', 'warning');
+                resultDiv.className = 'result warning';
+                return;
+            }
+
+            const testUrl = `${API_BASE}/spotify?token=${encodeURIComponent(token)}`;
+            resultDiv.innerHTML = log(`Test de redirection vers: ${testUrl}`) + '\n' + 
+                                log('⚠️ Cette action va rediriger vers Spotify', 'warning');
+            resultDiv.className = 'result warning';
+        }
+
+        async function testTwitchToken() {
+            const resultDiv = document.getElementById('token-result');
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                resultDiv.innerHTML = log('Aucun token Twitch trouvé', 'warning');
+                resultDiv.className = 'result warning';
+                return;
+            }
+
+            try {
+                // Décoder le JWT pour voir son contenu
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                
+                let result = log('Token Twitch valide:', 'success') + '\n';
+                result += `User ID: ${payload.id}\n`;
+                result += `Display Name: ${payload.display_name}\n`;
+                result += `Role: ${payload.role}\n`;
+                result += `Is Streamer: ${payload.isStreamer}\n`;
+                result += `Expires: ${new Date(payload.exp * 1000).toLocaleString()}\n`;
+                
+                // Test du token côté backend
+                const response = await fetch(`${API_BASE}/debug/test-token?token=${encodeURIComponent(token)}`);
+                const testData = await response.json();
+                
+                result += '\n' + log('Test Backend:', 'success') + '\n';
+                result += JSON.stringify(testData, null, 2);
+                
+                resultDiv.innerHTML = `<pre>${result}</pre>`;
+                resultDiv.className = 'result success';
+            } catch (error) {
+                const errorMsg = log(`Erreur de décodage: ${error.message}`, 'error');
+                resultDiv.innerHTML = errorMsg;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        function analyzeCurrentUrl() {
+            const resultDiv = document.getElementById('url-result');
+            const url = new URL(window.location.href);
+            const params = new URLSearchParams(url.search);
+            
+            let result = log('Analyse URL actuelle:', 'info') + '\n';
+            result += `URL complète: ${url.href}\n\n`;
+            
+            // Vérifier les paramètres Spotify
+            const spotifyParams = ['spotify_success', 'spotify_error', 'spotify_user', 'linked_to_twitch'];
+            let hasSpotifyParams = false;
+            
+            spotifyParams.forEach(param => {
+                const value = params.get(param);
+                if (value !== null) {
+                    hasSpotifyParams = true;
+                    result += `${param}: ${decodeURIComponent(value)}\n`;
+                }
+            });
+            
+            if (!hasSpotifyParams) {
+                result += log('Aucun paramètre Spotify dans l\'URL', 'info');
+            }
+            
+            resultDiv.innerHTML = `<pre>${result}</pre>`;
+            resultDiv.className = hasSpotifyParams ? 'result success' : 'result';
+        }
+
+        function simulateErrorUrl() {
+            const resultDiv = document.getElementById('url-result');
+            
+            // Simuler une URL d'erreur pour tester le parsing
+            const testErrors = [
+                '[object Object]',
+                'access_denied',
+                'invalid_client',
+                'Configuration Spotify manquante'
+            ];
+            
+            let result = log('Simulation d\'erreurs Spotify:', 'warning') + '\n\n';
+            
+            testErrors.forEach(error => {
+                const encodedError = encodeURIComponent(error);
+                const decodedError = decodeURIComponent(encodedError);
+                result += `Erreur originale: ${error}\n`;
+                result += `Encodée: ${encodedError}\n`;
+                result += `Décodée: ${decodedError}\n`;
+                result += `Type après décodage: ${typeof decodedError}\n\n`;
+            });
+            
+            resultDiv.innerHTML = `<pre>${result}</pre>`;
+            resultDiv.className = 'result warning';
+        }
+
+        function checkLocalStorage() {
+            const resultDiv = document.getElementById('storage-result');
+            
+            let result = log('État du LocalStorage:', 'info') + '\n\n';
+            
+            const keys = ['token', 'user', 'spotifyUser', 'spotifyConnected'];
+            keys.forEach(key => {
+                const value = localStorage.getItem(key);
+                result += `${key}: ${value ? (key === 'token' ? value.substring(0, 30) + '...' : value) : 'non défini'}\n`;
+            });
+            
+            resultDiv.innerHTML = `<pre>${result}</pre>`;
+            resultDiv.className = 'result';
+        }
+
+        function clearSpotifyData() {
+            localStorage.removeItem('spotifyUser');
+            localStorage.removeItem('spotifyConnected');
+            
+            const resultDiv = document.getElementById('storage-result');
+            resultDiv.innerHTML = log('Données Spotify nettoyées du localStorage', 'success');
+            resultDiv.className = 'result success';
+        }
+
+        async function testSpotifyAPI() {
+            const resultDiv = document.getElementById('connectivity-result');
+            resultDiv.innerHTML = log('Test de connectivité API Spotify...');
+            
+            try {
+                // Test simple de connectivité à l'API Spotify
+                const response = await fetch('https://accounts.spotify.com/.well-known/oauth_authorization_server', {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    let result = log('API Spotify accessible:', 'success') + '\n';
+                    result += `Authorization endpoint: ${data.authorization_endpoint}\n`;
+                    result += `Token endpoint: ${data.token_endpoint}`;
+                    
+                    resultDiv.innerHTML = `<pre>${result}</pre>`;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.innerHTML = log(`Réponse HTTP: ${response.status}`, 'warning');
+                    resultDiv.className = 'result warning';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = log(`Erreur de connectivité: ${error.message}`, 'error');
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testCORS() {
+            const resultDiv = document.getElementById('connectivity-result');
+            resultDiv.innerHTML = log('Test CORS avec backend...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/debug/spotify`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = log('CORS fonctionne correctement', 'success');
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.innerHTML = log(`Erreur CORS: ${response.status}`, 'error');
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = log(`Erreur CORS: ${error.message}`, 'error');
+                resultDiv.className = 'result error';
+            }
+        }
+
+        function simulateSpotifyFlow() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('token-result').innerHTML = log('Connectez-vous d\'abord à Twitch', 'warning');
+                return;
+            }
+
+            const spotifyUrl = `${API_BASE}/spotify?token=${encodeURIComponent(token)}`;
+            
+            if (confirm('Cela va vous rediriger vers Spotify pour tester le flow complet. Continuer ?')) {
+                window.location.href = spotifyUrl;
+            }
+        }
+
+        // Auto-exécution au chargement
+        window.addEventListener('load', () => {
+            log('Page de debug chargée');
+            analyzeCurrentUrl();
+            checkLocalStorage();
+        });
+    </script>
+</body>
+</html> 
