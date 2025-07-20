@@ -699,6 +699,5 @@ module.exports = {
   requireStreamer,
   requireAuth,
   checkTwitchModeratorStatus,
-  spotifyUserTokens,
   twitchUserTokens
 };
