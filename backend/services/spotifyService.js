@@ -1,16 +1,22 @@
 const SpotifyWebApi = require('spotify-web-api-node');
 require('dotenv').config();
+const User = require('../models/User');
+const { spotifyUserTokens } = require('../auth');
 
-const spotifyApi = new SpotifyWebApi({
-  clientId: process.env.SPOTIFY_CLIENT_ID,
-  clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-});
-
+// Classe pour gérer les interactions avec l'API Spotify
 class SpotifyService {
+  constructor() {
+    this.spotifyApi = new SpotifyWebApi({
+      clientId: process.env.SPOTIFY_CLIENT_ID,
+      clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+      redirectUri: process.env.SPOTIFY_REDIRECT_URI
+    });
+  }
+
   static async initialize() {
     try {
-      const data = await spotifyApi.clientCredentialsGrant();
-      spotifyApi.setAccessToken(data.body['access_token']);
+      const data = await this.spotifyApi.clientCredentialsGrant();
+      this.spotifyApi.setAccessToken(data.body['access_token']);
       console.log('Spotify service initialized (real API)');
     } catch (error) {
       console.error('Error initializing Spotify API:', error);
@@ -23,7 +29,7 @@ class SpotifyService {
     if (!match) throw new Error('Invalid Spotify URL');
     const trackId = match[1];
     try {
-      const data = await spotifyApi.getTrack(trackId);
+      const data = await this.spotifyApi.getTrack(trackId);
       const track = data.body;
       return {
         spotify_url: spotifyUrl,
@@ -36,35 +42,50 @@ class SpotifyService {
     }
   }
 
-  // Recherche des morceaux sur Spotify
+  // Recherche des morceaux sur Spotify avec l'API publique
   static async searchTracks(query, limit = 20) {
+    console.log('🔍 Searching tracks on Spotify:', query);
+    
     try {
-      console.log('🔍 Searching Spotify for:', query);
-      const searchResults = await spotifyApi.searchTracks(query, { limit });
-      const tracks = searchResults.body.tracks.items;
+      // Utiliser l'authentification client credentials (publique)
+      const spotifyApi = new SpotifyWebApi({
+        clientId: process.env.SPOTIFY_CLIENT_ID,
+        clientSecret: process.env.SPOTIFY_CLIENT_SECRET
+      });
+
+      // Get access token (client credentials flow)
+      const data = await spotifyApi.clientCredentialsGrant();
+      spotifyApi.setAccessToken(data.body['access_token']);
+
+      const results = await spotifyApi.searchTracks(query, { limit });
       
-      // Formater les résultats pour le frontend
-      const formattedResults = tracks.map(track => ({
+      const tracks = results.body.tracks.items.map(track => ({
         id: track.id,
         name: track.name,
-        artist: track.artists.map(a => a.name).join(', '),
+        artist: track.artists.map(artist => artist.name).join(', '),
         album: track.album.name,
         duration: this.formatDuration(track.duration_ms),
+        image: track.album.images && track.album.images.length > 0 
+          ? track.album.images[0].url 
+          : null,
         spotify_url: track.external_urls.spotify,
-        preview_url: track.preview_url,
-        image: track.album.images[0]?.url || null,
-        popularity: track.popularity
+        preview_url: track.preview_url
       }));
 
-      console.log('✅ Found', formattedResults.length, 'tracks');
-      return formattedResults;
+      console.log(`✅ Found ${tracks.length} tracks for query: ${query}`);
+      return {
+        tracks,
+        total: results.body.tracks.total,
+        query
+      };
+
     } catch (error) {
-      console.error('Error searching Spotify tracks:', error);
-      throw new Error('Erreur lors de la recherche Spotify');
+      console.error('❌ Error searching tracks on Spotify:', error);
+      throw new Error('Erreur lors de la recherche sur Spotify: ' + error.message);
     }
   }
 
-  // Utilitaire pour formater la durée
+  // Helper pour formater la durée
   static formatDuration(durationMs) {
     const minutes = Math.floor(durationMs / 60000);
     const seconds = Math.floor((durationMs % 60000) / 1000);
@@ -75,26 +96,28 @@ class SpotifyService {
   static async addToPlaylist(trackId, playlistId, userId) {
     console.log('🎵 Adding track to playlist:', { trackId, playlistId, userId });
 
-    // Récupérer les tokens Spotify de l'utilisateur
-    const spotifyTokens = await User.getSpotifyTokens(userId);
+    // Récupérer les tokens Spotify de l'utilisateur depuis la mémoire (comme Twitch)
+    const spotifyData = spotifyUserTokens[userId];
     
-    if (!spotifyTokens) {
+    if (!spotifyData) {
       console.error('❌ No Spotify tokens found for user:', userId);
       throw new Error('Aucun token utilisateur Spotify disponible. Veuillez vous authentifier via /api/auth/spotify.');
     }
 
-    if (spotifyTokens.is_expired) {
+    // Vérifier si le token est expiré
+    const isExpired = Date.now() >= spotifyData.expires_at;
+    if (isExpired) {
       console.error('❌ Spotify tokens expired for user:', userId);
       throw new Error('Token Spotify expiré. Veuillez vous réauthentifier via /api/auth/spotify.');
     }
 
-    console.log('✅ Valid Spotify tokens found for:', spotifyTokens.display_name);
+    console.log('✅ Valid Spotify tokens found for:', spotifyData.display_name);
 
     const userApi = new SpotifyWebApi({
       clientId: process.env.SPOTIFY_CLIENT_ID,
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-      accessToken: spotifyTokens.access_token,
-      refreshToken: spotifyTokens.refresh_token,
+      accessToken: spotifyData.access_token,
+      refreshToken: spotifyData.refresh_token,
     });
 
     try {
