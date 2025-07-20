@@ -24,14 +24,16 @@ router.use((req, res, next) => {
 // Route pour démarrer l'auth Twitch
 router.get('/twitch', (req, res) => {
   console.log('Starting Twitch authentication...');
+  
+  // Générer un state et le signer avec JWT (plus fiable que les sessions)
   const state = Math.random().toString(36).substring(7);
-  req.session.state = state;
+  const stateToken = jwt.sign({ state, timestamp: Date.now() }, process.env.JWT_SECRET, { expiresIn: '10m' });
   
   const scopes = 'user:read:email moderation:read';
-  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT_ID}&redirect_uri=${process.env.TWITCH_REDIRECT_URI}&response_type=code&scope=${scopes}&state=${state}`;
+  const url = `https://id.twitch.tv/oauth2/authorize?client_id=${process.env.TWITCH_CLIENT_ID}&redirect_uri=${process.env.TWITCH_REDIRECT_URI}&response_type=code&scope=${scopes}&state=${stateToken}`;
   
   console.log('Redirecting to:', url);
-  console.log('Session state:', req.session.state);
+  console.log('Generated state token (JWT):', stateToken.substring(0, 20) + '...');
   res.redirect(url);
 });
 
@@ -42,10 +44,20 @@ router.get('/twitch/callback', async (req, res) => {
 
   const { code, state } = req.query;
   
-  // Vérifie le state pour la sécurité
-  if (state !== req.session.state) {
-    console.error('State mismatch');
-    return res.status(400).json({ error: 'Invalid state' });
+  // Vérifier le state JWT (plus fiable que les sessions)
+  try {
+    const decoded = jwt.verify(state, process.env.JWT_SECRET);
+    console.log('State JWT verified successfully:', decoded);
+    
+    // Vérifier que le token n'est pas trop ancien (10 minutes max)
+    const tokenAge = Date.now() - decoded.timestamp;
+    if (tokenAge > 10 * 60 * 1000) {
+      console.error('State token expired');
+      return res.status(400).json({ error: 'State token expired' });
+    }
+  } catch (error) {
+    console.error('Invalid state token:', error.message);
+    return res.status(400).json({ error: 'Invalid state token' });
   }
 
   try {
