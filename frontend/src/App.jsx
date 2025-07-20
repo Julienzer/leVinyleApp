@@ -203,7 +203,7 @@ function App() {
                 </svg>
                 Se connecter
               </button>
-              {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
+              {/* Le bouton Spotify n'est plus affiché quand l'utilisateur n'est pas connecté à Twitch */}
             </>
           ) : (
             <div className="flex items-center gap-3">
@@ -226,8 +226,14 @@ function App() {
                 </svg>
               </button>
               
-              {/* Bouton Spotify - Se déconnecter/connecter à Spotify */}
-              {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
+              {/* Bouton Spotify - Uniquement visible quand connecté à Twitch */}
+              {!isTestMode && (
+                <SpotifyLoginButton 
+                  key={spotifyRefreshKey} 
+                  token={token}
+                  user={user}
+                />
+              )}
             </div>
           )}
         </div>

@@ -65,7 +65,15 @@ const SpotifyPlaylistManager = ({
         return;
       }
 
-      const response = await api.get('/api/auth/spotify/status');
+      // Vérifier que l'utilisateur est connecté à Twitch avant de vérifier Spotify
+      if (!token) {
+        console.log('🔒 Pas de token Twitch, impossible de vérifier Spotify');
+        setSpotifyConnected(false);
+        setSpotifyUser(null);
+        return;
+      }
+
+      const response = await api.get('/api/auth/spotify/status', token);
       const data = await response.json();
       
       console.log('🎵 Statut Spotify:', data);
