@@ -150,50 +150,112 @@ router.get('/twitch/callback', async (req, res) => {
 let twitchUserTokens = {}; // Garde seulement pour la modération Twitch
 
 router.get('/spotify', (req, res) => {
-  console.log('🎵 Starting Spotify authentication...');
-  console.log('🔍 Query params:', req.query);
-  console.log('🔍 Headers:', req.headers);
+  console.log('🎵 [Backend] === DÉBUT AUTHENTIFICATION SPOTIFY ===');
+  console.log('🎵 [Backend] Timestamp:', new Date().toISOString());
+  console.log('🎵 [Backend] Méthode:', req.method);
+  console.log('🎵 [Backend] URL complète:', req.originalUrl);
+  console.log('🎵 [Backend] Base URL:', req.baseUrl);
+  console.log('🎵 [Backend] Path:', req.path);
+  console.log('🔍 [Backend] Query params reçus:', JSON.stringify(req.query, null, 2));
+  console.log('🔍 [Backend] Headers reçus:', JSON.stringify({
+    authorization: req.headers.authorization ? `${req.headers.authorization.substring(0, 30)}...` : 'absent',
+    'user-agent': req.headers['user-agent'],
+    referer: req.headers.referer,
+    origin: req.headers.origin
+  }, null, 2));
   
   // Récupérer le token Twitch depuis les headers ou query params
   let currentUserId = null;
   let twitchToken = null;
+  let userDisplayName = null;
+  
+  console.log('🔍 [Backend] === ANALYSE TOKEN TWITCH ===');
   
   // Essayer d'abord les headers (pour les appels API)
   const authHeader = req.headers.authorization;
+  console.log('🔍 [Backend] Authorization header présent:', !!authHeader);
+  
   if (authHeader) {
+    console.log('🔍 [Backend] Tentative décodage token depuis headers...');
     try {
       twitchToken = authHeader.split(' ')[1];
+      console.log('🔍 [Backend] Token extrait du header:', twitchToken ? `${twitchToken.substring(0, 20)}...` : 'null');
+      
       const payload = jwt.verify(twitchToken, process.env.JWT_SECRET);
       currentUserId = payload.id;
-      console.log('✅ Utilisateur Twitch identifié via headers:', currentUserId, payload.display_name);
+      userDisplayName = payload.display_name;
+      console.log('✅ [Backend] Token JWT headers décodé avec succès:', {
+        userId: currentUserId,
+        displayName: userDisplayName,
+        role: payload.role,
+        isStreamer: payload.isStreamer
+      });
     } catch (error) {
-      console.log('⚠️ Token JWT invalide dans headers:', error.message);
+      console.log('⚠️ [Backend] Erreur décodage token JWT headers:', error.message);
     }
+  } else {
+    console.log('🔍 [Backend] Aucun authorization header trouvé');
   }
   
   // Si pas de token dans headers, essayer query params (pour les redirections)
   if (!currentUserId && req.query.token) {
+    console.log('🔍 [Backend] Tentative décodage token depuis query params...');
+    console.log('🔍 [Backend] Token query param présent:', !!req.query.token);
+    console.log('🔍 [Backend] Token query param (tronqué):', req.query.token ? `${req.query.token.substring(0, 20)}...` : 'null');
+    
     try {
       twitchToken = req.query.token;
       const payload = jwt.verify(twitchToken, process.env.JWT_SECRET);
       currentUserId = payload.id;
-      console.log('✅ Utilisateur Twitch identifié via query params:', currentUserId, payload.display_name);
+      userDisplayName = payload.display_name;
+      console.log('✅ [Backend] Token JWT query params décodé avec succès:', {
+        userId: currentUserId,
+        displayName: userDisplayName,
+        role: payload.role,
+        isStreamer: payload.isStreamer
+      });
     } catch (error) {
-      console.log('⚠️ Token JWT invalide dans query params:', error.message);
+      console.log('⚠️ [Backend] Erreur décodage token JWT query params:', error.message);
+      console.log('⚠️ [Backend] Détails erreur:', {
+        name: error.name,
+        message: error.message,
+        expiredAt: error.expiredAt
+      });
     }
+  } else if (!currentUserId) {
+    console.log('🔍 [Backend] Aucun token en query params non plus');
   }
   
   if (!currentUserId) {
-    console.log('⚠️ Aucun token Twitch valide trouvé, connexion Spotify sans liaison');
+    console.log('⚠️ [Backend] === AUCUN TOKEN TWITCH VALIDE TROUVÉ ===');
+    console.log('⚠️ [Backend] La connexion Spotify se fera sans liaison Twitch');
+  } else {
+    console.log('✅ [Backend] === TOKEN TWITCH VALIDÉ ===');
+    console.log('✅ [Backend] Utilisateur Twitch identifié:', {
+      id: currentUserId,
+      name: userDisplayName
+    });
   }
   
+  console.log('🔍 [Backend] === GÉNÉRATION STATE JWT ===');
   // Stocker l'ID utilisateur dans un state JWT pour le callback
-  const state = jwt.sign({ 
+  const stateData = { 
     userId: currentUserId,
+    userName: userDisplayName,
     twitchToken: twitchToken, // Stocker aussi le token pour le callback
     timestamp: Date.now() 
-  }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  };
+  console.log('🔍 [Backend] Données à stocker dans state:', {
+    userId: stateData.userId,
+    userName: stateData.userName,
+    hasToken: !!stateData.twitchToken,
+    timestamp: new Date(stateData.timestamp).toISOString()
+  });
   
+  const state = jwt.sign(stateData, process.env.JWT_SECRET, { expiresIn: '10m' });
+  console.log('✅ [Backend] State JWT généré:', `${state.substring(0, 30)}...`);
+  
+  console.log('🔍 [Backend] === VÉRIFICATION CONFIGURATION SPOTIFY ===');
   const scopes = [
     'playlist-modify-public',
     'playlist-modify-private',
@@ -202,13 +264,27 @@ router.get('/spotify', (req, res) => {
   const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   
+  console.log('🔍 [Backend] Configuration Spotify:', {
+    clientId: clientId ? `${clientId.substring(0, 10)}...` : 'MANQUANT',
+    redirectUri: redirectUri || 'MANQUANT',
+    scopes: scopes,
+    hasClientSecret: !!process.env.SPOTIFY_CLIENT_SECRET
+  });
+  
   // Vérification des variables d'environnement
   if (!clientId || !redirectUri) {
-    console.error('Missing Spotify configuration:', { clientId, redirectUri });
+    console.error('❌ [Backend] === CONFIGURATION SPOTIFY MANQUANTE ===');
+    console.error('❌ [Backend] clientId présent:', !!clientId);
+    console.error('❌ [Backend] redirectUri présent:', !!redirectUri);
+    console.error('❌ [Backend] Variables d\'environnement manquantes');
+    
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent('Configuration Spotify manquante')}`);
+    const errorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent('Configuration Spotify manquante')}`;
+    console.error('❌ [Backend] Redirection vers erreur:', errorUrl);
+    return res.redirect(errorUrl);
   }
 
+  console.log('🔍 [Backend] === CONSTRUCTION URL SPOTIFY ===');
   const url = new URL('https://accounts.spotify.com/authorize');
   url.searchParams.append('response_type', 'code');
   url.searchParams.append('client_id', clientId);
@@ -217,62 +293,156 @@ router.get('/spotify', (req, res) => {
   url.searchParams.append('state', state);
   url.searchParams.append('show_dialog', 'true'); // Force la page de connexion
 
-  console.log('🔄 Redirecting to Spotify auth URL:', url.toString());
+  console.log('✅ [Backend] URL Spotify construite:', url.toString());
+  console.log('✅ [Backend] Paramètres de l\'URL:', {
+    response_type: url.searchParams.get('response_type'),
+    client_id: url.searchParams.get('client_id'),
+    scope: url.searchParams.get('scope'),
+    redirect_uri: url.searchParams.get('redirect_uri'),
+    state: url.searchParams.get('state') ? `${url.searchParams.get('state').substring(0, 30)}...` : 'null',
+    show_dialog: url.searchParams.get('show_dialog')
+  });
+
+  console.log('🔄 [Backend] === REDIRECTION VERS SPOTIFY ===');
+  console.log('🔄 [Backend] Timestamp redirection:', new Date().toISOString());
   res.redirect(url.toString());
 });
 
 router.get('/spotify/callback', async (req, res) => {
-  console.log('🔄 Received Spotify callback');
-  console.log('📥 Query params:', req.query);
+  console.log('🔄 [Backend] === DÉBUT CALLBACK SPOTIFY ===');
+  console.log('🔄 [Backend] Timestamp:', new Date().toISOString());
+  console.log('🔄 [Backend] Méthode:', req.method);
+  console.log('🔄 [Backend] URL complète:', req.originalUrl);
+  console.log('📥 [Backend] Query params reçus:', JSON.stringify(req.query, null, 2));
+  console.log('📥 [Backend] Headers callback:', JSON.stringify({
+    'user-agent': req.headers['user-agent'],
+    referer: req.headers.referer,
+    origin: req.headers.origin
+  }, null, 2));
 
   const { code, error, state } = req.query;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   
+  console.log('🔍 [Backend] === ANALYSE PARAMÈTRES CALLBACK ===');
+  console.log('🔍 [Backend] Code présent:', !!code);
+  console.log('🔍 [Backend] Code (tronqué):', code ? `${code.substring(0, 30)}...` : 'absent');
+  console.log('🔍 [Backend] Error présent:', !!error);
+  console.log('🔍 [Backend] Error valeur:', error);
+  console.log('🔍 [Backend] State présent:', !!state);
+  console.log('🔍 [Backend] State (tronqué):', state ? `${state.substring(0, 30)}...` : 'absent');
+  console.log('🔍 [Backend] Frontend URL:', frontendUrl);
+  
   if (error) {
-    console.error('❌ Spotify auth error:', error);
-    console.error('❌ Error type:', typeof error);
-    console.error('❌ Error JSON stringify:', JSON.stringify(error));
+    console.error('❌ [Backend] === ERREUR SPOTIFY OAUTH ===');
+    console.error('❌ [Backend] Erreur Spotify:', error);
+    console.error('❌ [Backend] Type erreur:', typeof error);
+    console.error('❌ [Backend] Erreur stringifiée:', JSON.stringify(error));
     
     // S'assurer que l'erreur est une chaîne de caractères
     const errorMessage = typeof error === 'string' ? error : 'Erreur d\'authentification Spotify';
-    console.log('✅ Error message after conversion:', errorMessage);
+    console.log('✅ [Backend] Message d\'erreur converti:', errorMessage);
     
-    return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`);
+    const errorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`;
+    console.error('❌ [Backend] Redirection vers erreur:', errorUrl);
+    return res.redirect(errorUrl);
   }
 
   if (!code) {
-    console.error('❌ No code received from Spotify');
-    return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent('Code d\'autorisation manquant')}`);
+    console.error('❌ [Backend] === CODE AUTORISATION MANQUANT ===');
+    console.error('❌ [Backend] Aucun code reçu de Spotify');
+    const errorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent('Code d\'autorisation manquant')}`;
+    console.error('❌ [Backend] Redirection vers erreur:', errorUrl);
+    return res.redirect(errorUrl);
   }
 
+  console.log('🔍 [Backend] === DÉCODAGE STATE JWT ===');
   // Décoder le state pour récupérer l'utilisateur Twitch
   let twitchUserId = null;
+  let twitchUserName = null;
+  let originalTwitchToken = null;
+  
   if (state) {
+    console.log('🔍 [Backend] State présent, tentative de décodage...');
     try {
       const decoded = jwt.verify(state, process.env.JWT_SECRET);
       twitchUserId = decoded.userId;
-      console.log('✅ Utilisateur Twitch identifié via state:', twitchUserId);
+      twitchUserName = decoded.userName;
+      originalTwitchToken = decoded.twitchToken;
+      
+      console.log('✅ [Backend] State JWT décodé avec succès:', {
+        userId: twitchUserId,
+        userName: twitchUserName,
+        hasOriginalToken: !!originalTwitchToken,
+        timestamp: new Date(decoded.timestamp).toISOString()
+      });
     } catch (error) {
-      console.log('⚠️ State JWT invalide, connexion Spotify sans lien Twitch');
+      console.log('⚠️ [Backend] Erreur décodage state JWT:', error.message);
+      console.log('⚠️ [Backend] Détails erreur state:', {
+        name: error.name,
+        message: error.message,
+        expiredAt: error.expiredAt
+      });
     }
+  } else {
+    console.log('⚠️ [Backend] Aucun state fourni');
   }
 
+  if (!twitchUserId) {
+    console.log('⚠️ [Backend] === CONNEXION SPOTIFY SANS LIEN TWITCH ===');
+  } else {
+    console.log('✅ [Backend] === UTILISATEUR TWITCH IDENTIFIÉ ===');
+    console.log('✅ [Backend] Lien avec compte Twitch:', {
+      id: twitchUserId,
+      name: twitchUserName
+    });
+  }
+
+  console.log('🔍 [Backend] === INITIALISATION API SPOTIFY ===');
   const api = new spotifyApi({
     clientId: process.env.SPOTIFY_CLIENT_ID,
     clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
     redirectUri: process.env.SPOTIFY_REDIRECT_URI,
   });
+  
+  console.log('🔍 [Backend] SpotifyApi configuré:', {
+    clientId: process.env.SPOTIFY_CLIENT_ID ? `${process.env.SPOTIFY_CLIENT_ID.substring(0, 10)}...` : 'MANQUANT',
+    hasClientSecret: !!process.env.SPOTIFY_CLIENT_SECRET,
+    redirectUri: process.env.SPOTIFY_REDIRECT_URI
+  });
 
   try {
-    console.log('🔄 Exchanging code for tokens...');
+    console.log('🔄 [Backend] === ÉCHANGE CODE CONTRE TOKENS ===');
+    console.log('🔄 [Backend] Tentative d\'échange du code...');
+    
     const data = await api.authorizationCodeGrant(code);
     const access_token = data.body['access_token'];
     const refresh_token = data.body['refresh_token'];
     const expires_in = data.body['expires_in'];
     
-    console.log('🔑 Tokens received, getting user info...');
+    console.log('✅ [Backend] Tokens reçus de Spotify:', {
+      hasAccessToken: !!access_token,
+      accessTokenLength: access_token ? access_token.length : 0,
+      hasRefreshToken: !!refresh_token,
+      refreshTokenLength: refresh_token ? refresh_token.length : 0,
+      expiresIn: expires_in,
+      expiresAt: new Date(Date.now() + expires_in * 1000).toISOString()
+    });
+    
+    console.log('🔑 [Backend] === RÉCUPÉRATION PROFIL SPOTIFY ===');
     api.setAccessToken(access_token);
+    console.log('🔑 [Backend] Token d\'accès configuré, récupération profil...');
+    
     const me = await api.getMe();
+    console.log('✅ [Backend] Profil Spotify récupéré:', {
+      id: me.body.id,
+      display_name: me.body.display_name,
+      email: me.body.email,
+      country: me.body.country,
+      hasImages: me.body.images && me.body.images.length > 0,
+      imageUrl: me.body.images && me.body.images.length > 0 ? me.body.images[0].url : null,
+      followers: me.body.followers ? me.body.followers.total : 0,
+      product: me.body.product
+    });
     
     const spotifyData = {
       spotify_id: me.body.id,
@@ -282,59 +452,113 @@ router.get('/spotify/callback', async (req, res) => {
       display_name: me.body.display_name,
       profile_picture: me.body.images && me.body.images.length > 0 ? me.body.images[0].url : null
     };
+    
+    console.log('💾 [Backend] === DONNÉES SPOTIFY À STOCKER ===');
+    console.log('💾 [Backend] Données Spotify formatées:', {
+      spotify_id: spotifyData.spotify_id,
+      display_name: spotifyData.display_name,
+      hasAccessToken: !!spotifyData.spotify_access_token,
+      hasRefreshToken: !!spotifyData.spotify_refresh_token,
+      expires_in: spotifyData.expires_in,
+      hasProfilePicture: !!spotifyData.profile_picture
+    });
 
     // Si l'utilisateur est connecté via Twitch, lier les tokens Spotify à son compte
     if (twitchUserId) {
+      console.log('🔗 [Backend] === LIAISON AVEC COMPTE TWITCH ===');
+      console.log('🔗 [Backend] Tentative de liaison avec Twitch ID:', twitchUserId);
+      
       try {
         await User.updateSpotifyTokens(twitchUserId, spotifyData);
-        console.log('✅ Tokens Spotify liés au compte Twitch:', twitchUserId);
+        console.log('✅ [Backend] Tokens Spotify liés au compte Twitch avec succès');
+        console.log('✅ [Backend] Utilisateur:', twitchUserName, '(ID:', twitchUserId, ')');
         
         // Rediriger avec succès et nom d'utilisateur
-        return res.redirect(`${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=true`);
+        const successUrl = `${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=true`;
+        console.log('✅ [Backend] === SUCCÈS AVEC LIAISON TWITCH ===');
+        console.log('✅ [Backend] Redirection vers:', successUrl);
+        return res.redirect(successUrl);
       } catch (dbError) {
-        console.error('❌ Erreur lors de la liaison avec le compte Twitch:', dbError);
-        console.error('❌ dbError type:', typeof dbError);
-        console.error('❌ dbError JSON stringify:', JSON.stringify(dbError));
+        console.error('❌ [Backend] === ERREUR LIAISON BASE DE DONNÉES ===');
+        console.error('❌ [Backend] Erreur lors de la liaison avec Twitch:', dbError);
+        console.error('❌ [Backend] Type erreur DB:', typeof dbError);
+        console.error('❌ [Backend] Message erreur DB:', dbError.message);
+        console.error('❌ [Backend] Stack erreur DB:', dbError.stack);
         
         // Continuer sans lier - l'utilisateur pourra réessayer
+        console.log('⚠️ [Backend] Continuation sans lier, connexion Spotify simple');
       }
     }
 
     // Si pas de compte Twitch ou erreur de liaison, succès simple
-    console.log('✅ Spotify user authenticated (non lié à Twitch):', me.body.display_name);
-    res.redirect(`${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=false`);
+    console.log('✅ [Backend] === SUCCÈS SPOTIFY SIMPLE ===');
+    console.log('✅ [Backend] Utilisateur Spotify authentifié sans lien Twitch:', me.body.display_name);
+    
+    const simpleSuccessUrl = `${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=false`;
+    console.log('✅ [Backend] Redirection vers:', simpleSuccessUrl);
+    res.redirect(simpleSuccessUrl);
     
   } catch (err) {
-    console.error('❌ Erreur OAuth Spotify:', err);
-    console.error('❌ Error type:', typeof err);
-    console.error('❌ Error JSON stringify:', JSON.stringify(err));
+    console.error('❌ [Backend] === ERREUR OAUTH SPOTIFY ===');
+    console.error('❌ [Backend] Type erreur:', typeof err);
+    console.error('❌ [Backend] Erreur complète:', err);
+    console.error('❌ [Backend] Message erreur:', err.message);
+    console.error('❌ [Backend] Stack erreur:', err.stack);
+    
+    if (err.response) {
+      console.error('❌ [Backend] Réponse HTTP erreur:', {
+        status: err.response.status,
+        statusText: err.response.statusText,
+        data: err.response.data,
+        headers: err.response.headers
+      });
+    }
+    
+    if (err.body) {
+      console.error('❌ [Backend] Body erreur Spotify:', err.body);
+    }
     
     // Gestion intelligente du message d'erreur
     let errorMessage = 'Erreur d\'authentification Spotify';
     
     if (typeof err === 'string') {
       errorMessage = err;
+      console.log('📝 [Backend] Erreur string directe:', errorMessage);
     } else if (err && err.message) {
       errorMessage = err.message;
+      console.log('📝 [Backend] Message d\'erreur extrait:', errorMessage);
     } else if (err && err.body && err.body.error_description) {
       errorMessage = err.body.error_description;
+      console.log('📝 [Backend] Description erreur Spotify:', errorMessage);
     } else if (err && err.statusCode) {
       errorMessage = `Erreur Spotify ${err.statusCode}`;
+      console.log('📝 [Backend] Erreur avec code statut:', errorMessage);
     }
     
-    console.log('📝 Message d\'erreur formaté:', errorMessage);
-    console.log('📝 Type du message d\'erreur formaté:', typeof errorMessage);
+    console.log('📝 [Backend] Message d\'erreur final:', errorMessage);
+    console.log('📝 [Backend] Type du message final:', typeof errorMessage);
     
-    res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`);
+    const finalErrorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`;
+    console.error('❌ [Backend] === REDIRECTION ERREUR FINALE ===');
+    console.error('❌ [Backend] URL erreur finale:', finalErrorUrl);
+    res.redirect(finalErrorUrl);
   }
 });
 
 // Route pour vérifier le statut de l'authentification Spotify
 router.get('/spotify/status', async (req, res) => {
+  console.log('🔍 [Backend] === VÉRIFICATION STATUT SPOTIFY ===');
+  console.log('🔍 [Backend] Timestamp:', new Date().toISOString());
+  console.log('🔍 [Backend] Headers status:', JSON.stringify({
+    authorization: req.headers.authorization ? `${req.headers.authorization.substring(0, 30)}...` : 'absent',
+    'user-agent': req.headers['user-agent']
+  }, null, 2));
+  
   try {
     // Récupérer l'utilisateur depuis le JWT
     const authHeader = req.headers.authorization;
     if (!authHeader) {
+      console.log('⚠️ [Backend] Aucun token d\'authentification fourni');
       return res.json({
         success: true,
         authenticated: false,
@@ -343,17 +567,23 @@ router.get('/spotify/status', async (req, res) => {
       });
     }
 
+    console.log('🔍 [Backend] Décodage token JWT pour statut...');
     const token = authHeader.split(' ')[1];
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const userId = payload.id;
 
-    console.log('🔍 Vérification statut Spotify pour utilisateur:', userId);
+    console.log('✅ [Backend] Token JWT décodé:', {
+      userId: userId,
+      displayName: payload.display_name,
+      role: payload.role
+    });
+    console.log('🔍 [Backend] Recherche tokens Spotify pour utilisateur:', userId);
 
     // Récupérer les tokens Spotify de cet utilisateur depuis la DB
     const spotifyTokens = await User.getSpotifyTokens(userId);
     
     if (!spotifyTokens) {
-      console.log('❌ Aucun token Spotify trouvé pour cet utilisateur');
+      console.log('❌ [Backend] Aucun token Spotify trouvé pour cet utilisateur');
       return res.json({
         success: true,
         authenticated: false,
@@ -362,12 +592,16 @@ router.get('/spotify/status', async (req, res) => {
       });
     }
 
-    console.log('✅ Tokens Spotify trouvés:', {
+    console.log('✅ [Backend] Tokens Spotify trouvés:', {
+      spotify_id: spotifyTokens.spotify_id,
       display_name: spotifyTokens.display_name,
-      expired: spotifyTokens.is_expired
+      hasAccessToken: !!spotifyTokens.spotify_access_token,
+      hasRefreshToken: !!spotifyTokens.spotify_refresh_token,
+      expired: spotifyTokens.is_expired,
+      expiresAt: spotifyTokens.expires_at ? new Date(spotifyTokens.expires_at).toISOString() : 'inconnu'
     });
 
-    res.json({
+    const responseData = {
       success: true,
       authenticated: !spotifyTokens.is_expired,
       currentUser: {
@@ -379,10 +613,22 @@ router.get('/spotify/status', async (req, res) => {
       },
       userCount: 1, // Toujours 1 car c'est lié à l'utilisateur actuel
       linked_to_twitch: true
+    };
+
+    console.log('✅ [Backend] Réponse statut Spotify:', {
+      authenticated: responseData.authenticated,
+      user: responseData.currentUser.display_name,
+      expired: responseData.currentUser.is_expired
     });
+    
+    res.json(responseData);
 
   } catch (error) {
-    console.error('❌ Erreur lors de la vérification du statut Spotify:', error);
+    console.error('❌ [Backend] === ERREUR VÉRIFICATION STATUT SPOTIFY ===');
+    console.error('❌ [Backend] Erreur complète:', error);
+    console.error('❌ [Backend] Message:', error.message);
+    console.error('❌ [Backend] Stack:', error.stack);
+    
     res.json({
       success: true,
       authenticated: false,
@@ -394,44 +640,65 @@ router.get('/spotify/status', async (req, res) => {
 
 // Route pour déconnexion générale
 router.post('/logout', (req, res) => {
+  console.log('🚪 [Backend] === DÉCONNEXION GÉNÉRALE ===');
+  console.log('🚪 [Backend] Timestamp:', new Date().toISOString());
+  
   req.session.destroy((err) => {
     if (err) {
-      console.error('Error destroying session:', err);
+      console.error('❌ [Backend] Erreur destruction session:', err);
       return res.status(500).json({ error: 'Logout failed' });
     }
+    console.log('✅ [Backend] Session détruite avec succès');
     res.json({ success: true, message: 'Logged out successfully' });
   });
 });
 
 // Route pour déconnexion Spotify uniquement
 router.post('/spotify/logout', async (req, res) => {
+  console.log('🎵 [Backend] === DÉCONNEXION SPOTIFY ===');
+  console.log('🎵 [Backend] Timestamp:', new Date().toISOString());
+  console.log('🎵 [Backend] Headers logout:', JSON.stringify({
+    authorization: req.headers.authorization ? `${req.headers.authorization.substring(0, 30)}...` : 'absent',
+    'user-agent': req.headers['user-agent']
+  }, null, 2));
+  
   try {
     // Récupérer l'utilisateur depuis le JWT
     const authHeader = req.headers.authorization;
     if (!authHeader) {
+      console.error('❌ [Backend] Token d\'authentification requis pour déconnexion');
       return res.status(401).json({
         success: false,
         error: 'Token d\'authentification requis'
       });
     }
 
+    console.log('🔍 [Backend] Décodage token JWT pour déconnexion...');
     const token = authHeader.split(' ')[1];
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const userId = payload.id;
 
-    console.log('🔄 Déconnexion Spotify pour utilisateur:', userId);
+    console.log('✅ [Backend] Token JWT décodé pour déconnexion:', {
+      userId: userId,
+      displayName: payload.display_name
+    });
+    console.log('🗑️ [Backend] Suppression tokens Spotify pour utilisateur:', userId);
 
     // Supprimer les tokens Spotify de cet utilisateur
     await User.clearSpotifyTokens(userId);
     
-    console.log('✅ Tokens Spotify supprimés pour:', userId);
+    console.log('✅ [Backend] Tokens Spotify supprimés avec succès pour:', payload.display_name);
     res.json({ 
       success: true, 
       message: 'Déconnecté de Spotify avec succès',
       authenticated: false 
     });
   } catch (error) {
-    console.error('❌ Erreur lors de la déconnexion Spotify:', error);
+    console.error('❌ [Backend] === ERREUR DÉCONNEXION SPOTIFY ===');
+    console.error('❌ [Backend] Erreur complète:', error);
+    console.error('❌ [Backend] Message:', error.message);
+    console.error('❌ [Backend] Stack:', error.stack);
+    
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la déconnexion Spotify' 

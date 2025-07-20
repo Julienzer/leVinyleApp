@@ -26,12 +26,16 @@ function App() {
   const [spotifyConnected, setSpotifyConnected] = useState(false)
 
   useEffect(() => {
+    console.log('🚀 [Frontend] useEffect principal - démarrage application');
+    
     if (isTestMode) {
+      console.log('🧪 [Frontend] Mode test activé');
       // En mode test, commencer avec un utilisateur viewer par défaut
       setUser(fakeUsers.viewer)
       setToken('fake-token-123')
       setLoading(false)
     } else {
+      console.log('🌐 [Frontend] Mode production - analyse URL');
       // Mode production normal
       const params = new URLSearchParams(window.location.search)
       const tokenFromUrl = params.get('token')
@@ -39,31 +43,56 @@ function App() {
       const spotifyError = params.get('spotify_error')
       const spotifyUser = params.get('spotify_user')
       
+      console.log('📥 [Frontend] Paramètres URL détectés:', {
+        tokenFromUrl: tokenFromUrl ? `${tokenFromUrl.substring(0, 20)}...` : null,
+        spotifySuccess,
+        spotifyError: spotifyError ? decodeURIComponent(spotifyError) : null,
+        spotifyUser: spotifyUser ? decodeURIComponent(spotifyUser) : null
+      });
+      
       // Gérer l'authentification Twitch
       if (tokenFromUrl) {
+        console.log('🔐 [Frontend] Token Twitch détecté dans URL');
         setToken(tokenFromUrl)
         localStorage.setItem('token', tokenFromUrl)
         try {
           const payload = JSON.parse(atob(tokenFromUrl.split('.')[1]))
+          console.log('✅ [Frontend] Token JWT décodé:', {
+            id: payload.id,
+            display_name: payload.display_name,
+            role: payload.role,
+            isStreamer: payload.isStreamer
+          });
           setUser(payload)
           localStorage.setItem('user', JSON.stringify(payload))
         } catch (e) {
-          console.error('Error decoding token:', e)
+          console.error('❌ [Frontend] Erreur décodage token JWT:', e)
         }
         // Nettoyer l'URL après avoir récupéré le token
         window.history.replaceState({}, document.title, window.location.pathname)
       } else {
+        console.log('🔍 [Frontend] Pas de token en URL, vérification localStorage');
         // Essayer de récupérer le token depuis localStorage
         const storedToken = localStorage.getItem('token')
         const storedUser = localStorage.getItem('user')
         
+        console.log('💾 [Frontend] localStorage check:', {
+          hasStoredToken: !!storedToken,
+          hasStoredUser: !!storedUser
+        });
+        
         if (storedToken && storedUser) {
+          console.log('✅ [Frontend] Données utilisateur trouvées en localStorage');
           setToken(storedToken)
           try {
             const userData = JSON.parse(storedUser)
+            console.log('👤 [Frontend] Utilisateur restauré:', {
+              id: userData.id,
+              display_name: userData.display_name
+            });
             setUser(userData)
           } catch (e) {
-            console.error('Error parsing stored user:', e)
+            console.error('❌ [Frontend] Erreur parsing utilisateur stocké:', e)
             // Nettoyer le localStorage si les données sont corrompues
             localStorage.removeItem('token')
             localStorage.removeItem('user')
@@ -73,6 +102,7 @@ function App() {
 
       // Gérer le retour de l'authentification Spotify
       if (spotifySuccess === 'true') {
+        console.log('🎉 [Frontend] Retour positif de Spotify OAuth');
         setNotification({
           type: 'success',
           message: `Spotify connecté avec succès !${spotifyUser ? ` (${decodeURIComponent(spotifyUser)})` : ''}`
@@ -84,41 +114,54 @@ function App() {
             display_name: decodeURIComponent(spotifyUser),
             connected: true
           }
+          console.log('💾 [Frontend] Stockage données Spotify:', spotifyUserData);
           setSpotifyUser(spotifyUserData)
           setSpotifyConnected(true)
           localStorage.setItem('spotifyUser', JSON.stringify(spotifyUserData))
           localStorage.setItem('spotifyConnected', 'true')
         } else {
+          console.log('💾 [Frontend] Stockage connexion Spotify sans nom utilisateur');
           setSpotifyConnected(true)
           localStorage.setItem('spotifyConnected', 'true')
         }
         
         // Déclencher un rafraîchissement du bouton Spotify
         setSpotifyRefreshKey(prev => prev + 1)
+        console.log('🔄 [Frontend] spotifyRefreshKey incrémenté');
       } else if (spotifyError) {
+        console.error('❌ [Frontend] Erreur Spotify OAuth:', decodeURIComponent(spotifyError));
         setNotification({
           type: 'error',
           message: `Erreur Spotify : ${decodeURIComponent(spotifyError)}`
         })
         
         // Nettoyer l'état Spotify en cas d'erreur
+        console.log('🗑️ [Frontend] Nettoyage état Spotify suite à l\'erreur');
         setSpotifyUser(null)
         setSpotifyConnected(false)
         localStorage.removeItem('spotifyUser')
         localStorage.removeItem('spotifyConnected')
       } else {
+        console.log('🔍 [Frontend] Pas de paramètre Spotify, vérification localStorage');
         // Récupérer l'état Spotify depuis localStorage au démarrage
         const storedSpotifyUser = localStorage.getItem('spotifyUser')
         const storedSpotifyConnected = localStorage.getItem('spotifyConnected')
         
+        console.log('💾 [Frontend] localStorage Spotify:', {
+          storedSpotifyConnected,
+          hasStoredSpotifyUser: !!storedSpotifyUser
+        });
+        
         if (storedSpotifyConnected === 'true') {
+          console.log('✅ [Frontend] Restauration état Spotify depuis localStorage');
           setSpotifyConnected(true)
           if (storedSpotifyUser) {
             try {
               const spotifyUserData = JSON.parse(storedSpotifyUser)
+              console.log('👤 [Frontend] Utilisateur Spotify restauré:', spotifyUserData.display_name);
               setSpotifyUser(spotifyUserData)
             } catch (e) {
-              console.error('Error parsing stored Spotify user:', e)
+              console.error('❌ [Frontend] Erreur parsing utilisateur Spotify stocké:', e)
               localStorage.removeItem('spotifyUser')
             }
           }
@@ -127,9 +170,11 @@ function App() {
 
       // Nettoyer l'URL
       if (tokenFromUrl || spotifySuccess || spotifyError) {
+        console.log('🧹 [Frontend] Nettoyage URL après traitement paramètres');
         window.history.replaceState({}, document.title, window.location.pathname)
       }
       
+      console.log('✅ [Frontend] Initialisation terminée');
       setLoading(false)
     }
   }, [])
@@ -156,13 +201,24 @@ function App() {
   }
 
   const handleLogout = () => {
+    console.log('🚪 [Frontend] handleLogout appelé');
+    console.log('🚪 [Frontend] État avant déconnexion:', {
+      user: user ? user.display_name : null,
+      spotifyConnected,
+      spotifyUser: spotifyUser ? spotifyUser.display_name : null,
+      isTestMode
+    });
+
     if (!isTestMode) {
+      console.log('🗑️ [Frontend] Nettoyage localStorage complet');
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       // Nettoyer aussi les données Spotify lors de la déconnexion Twitch
       localStorage.removeItem('spotifyUser')
       localStorage.removeItem('spotifyConnected')
     }
+    
+    console.log('🔄 [Frontend] Reset état global');
     setToken(null)
     setUser(null)
     setSpotifyUser(null)
@@ -171,10 +227,22 @@ function App() {
       type: 'success',
       message: 'Déconnecté avec succès'
     })
+    
+    console.log('✅ [Frontend] Déconnexion globale terminée');
   }
 
   const handleSpotifyLogin = () => {
+    console.log('🎵 [Frontend] handleSpotifyLogin appelé');
+    console.log('🎵 [Frontend] État actuel:', {
+      isTestMode,
+      token: token ? `${token.substring(0, 20)}...` : null,
+      user: user ? user.display_name : null,
+      spotifyConnected,
+      spotifyUser
+    });
+
     if (isTestMode) {
+      console.log('🧪 [Frontend] Mode test activé - simulation connexion Spotify');
       // En mode test, simuler la connexion Spotify
       const mockSpotifyUser = { display_name: 'TestSpotifyUser', connected: true }
       setSpotifyUser(mockSpotifyUser)
@@ -183,9 +251,12 @@ function App() {
         type: 'success',
         message: 'Spotify connecté avec succès (mode test)'
       })
+      console.log('✅ [Frontend] Mode test - Spotify simulé avec succès');
     } else {
+      console.log('🔍 [Frontend] Mode production - vérification token Twitch');
       // Vérifier qu'on a un token Twitch
       if (!token) {
+        console.error('❌ [Frontend] Aucun token Twitch disponible');
         setNotification({
           type: 'error',
           message: 'Vous devez être connecté à Twitch pour connecter Spotify'
@@ -193,23 +264,42 @@ function App() {
         return
       }
       
+      console.log('✅ [Frontend] Token Twitch validé, construction URL de redirection');
       // Rediriger vers l'authentification Spotify en passant le token via query parameter
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-      window.location.href = `${apiUrl}/api/auth/spotify?token=${encodeURIComponent(token)}`
+      const redirectUrl = `${apiUrl}/api/auth/spotify?token=${encodeURIComponent(token)}`
+      
+      console.log('🔄 [Frontend] Redirection vers:', redirectUrl);
+      console.log('🔄 [Frontend] VITE_API_URL:', import.meta.env.VITE_API_URL);
+      console.log('🔄 [Frontend] Token envoyé (tronqué):', token.substring(0, 30) + '...');
+      
+      window.location.href = redirectUrl
     }
   }
 
   const handleSpotifyLogout = () => {
+    console.log('🎵 [Frontend] handleSpotifyLogout appelé');
+    console.log('🎵 [Frontend] État avant déconnexion:', {
+      spotifyConnected,
+      spotifyUser: spotifyUser ? spotifyUser.display_name : null,
+      isTestMode
+    });
+
     if (!isTestMode) {
+      console.log('🗑️ [Frontend] Nettoyage localStorage Spotify');
       localStorage.removeItem('spotifyUser')
       localStorage.removeItem('spotifyConnected')
     }
+    
+    console.log('🔄 [Frontend] Mise à jour état local');
     setSpotifyUser(null)
     setSpotifyConnected(false)
     setNotification({
       type: 'success',
       message: 'Déconnecté de Spotify avec succès'
     })
+    
+    console.log('✅ [Frontend] Déconnexion Spotify terminée');
   }
 
   const handleTestUserChange = (newUser) => {

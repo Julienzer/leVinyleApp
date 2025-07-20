@@ -1,43 +1,79 @@
--- Structure de base de données pour Le Vinyle
--- Basée sur l'EBD fourni pour supporter les sessions musicales
+-- ===== SCRIPT DE RÉINITIALISATION COMPLÈTE =====
+-- Supprime et recrée toute la base de données Le Vinyle
+-- Version mise à jour avec support complet Spotify
 
--- ===== TABLE USERS =====
-CREATE TABLE IF NOT EXISTS users (
+-- Supprimer toutes les tables existantes (ordre important à cause des clés étrangères)
+DROP TABLE IF EXISTS playlist_tracks CASCADE;
+DROP TABLE IF EXISTS playlists CASCADE;
+DROP TABLE IF EXISTS session_history CASCADE;
+DROP TABLE IF EXISTS propositions CASCADE;
+DROP TABLE IF EXISTS moderators CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS tracks CASCADE;  -- Ancienne table obsolète
+DROP TABLE IF EXISTS users CASCADE;
+
+-- Supprimer les vues et fonctions existantes
+DROP VIEW IF EXISTS sessions_cleanup_view CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+DROP FUNCTION IF EXISTS update_session_activity() CASCADE;
+DROP FUNCTION IF EXISTS cleanup_inactive_sessions(INTEGER, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS get_session_cleanup_stats() CASCADE;
+
+-- ===== RECRÉATION DE LA STRUCTURE COMPLÈTE =====
+
+-- ===== TABLE USERS (avec colonnes Spotify complètes) =====
+CREATE TABLE users (
     id VARCHAR(255) PRIMARY KEY,  -- ID Twitch
     display_name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     role VARCHAR(50) DEFAULT 'viewer',  -- viewer, moderator, streamer
     is_streamer BOOLEAN DEFAULT FALSE,
+    
+    -- Informations de base Spotify
     spotify_id VARCHAR(255),
-    profile_picture VARCHAR(512),  -- URL de la photo de profil Twitch
-    spotify_profile_picture VARCHAR(512),  -- URL de la photo de profil Spotify
+    
+    -- Tokens Spotify (ajout des colonnes manquantes)
+    spotify_access_token TEXT,
+    spotify_refresh_token TEXT,
+    spotify_token_expires_at TIMESTAMP,
+    spotify_connected_at TIMESTAMP,
+    
+    -- Profils et métadonnées
+    profile_picture VARCHAR(512),  -- URL photo profil Twitch
+    spotify_profile_picture VARCHAR(512),  -- URL photo profil Spotify
     spotify_display_name VARCHAR(255),  -- Nom d'affichage Spotify
+    
+    -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===== TABLE SESSIONS =====
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE sessions (
     id SERIAL PRIMARY KEY,
     code VARCHAR(255) NOT NULL UNIQUE,  -- Code d'accès (ex: "julien", "test123")
     name VARCHAR(255) NOT NULL,
-    streamer_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    streamer_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     is_private BOOLEAN DEFAULT FALSE,
     prevent_duplicates BOOLEAN DEFAULT TRUE,
     queue_mode VARCHAR(50) DEFAULT 'chronological',  -- chronological, random
     active BOOLEAN DEFAULT TRUE,
+    
+    -- Gestion automatique et expiration
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP DEFAULT NULL,
     auto_cleanup BOOLEAN DEFAULT TRUE,
+    
+    -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===== TABLE PROPOSITIONS =====
-CREATE TABLE IF NOT EXISTS propositions (
+CREATE TABLE propositions (
     id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    viewer_id VARCHAR(255) NOT NULL REFERENCES users(id),
+    viewer_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     spotify_url VARCHAR(512) NOT NULL,
     track_name VARCHAR(255),
     artist VARCHAR(255),
@@ -46,10 +82,14 @@ CREATE TABLE IF NOT EXISTS propositions (
     message TEXT,
     status VARCHAR(50) DEFAULT 'pending',  -- pending, approved, rejected, added
     queue_position INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Modération
     moderated_at TIMESTAMP,
     moderator_id VARCHAR(255) REFERENCES users(id),
-    added_at TIMESTAMP
+    added_at TIMESTAMP,
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===== TABLE SESSION_HISTORY =====

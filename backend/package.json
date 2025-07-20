@@ -6,19 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "clean-db": "psql $DATABASE_URL -f db/init.sql",
-    "setup-db": "npm run clean-db",
-    "setup-playlists": "node scripts/setup-playlists.js",
-    "migrate-multi-users": "node scripts/migrate-multi-users.js",
-    "session-cleanup": "node scripts/session-maintenance.js",
-    "session-cleanup-dry": "node scripts/session-maintenance.js --dry-run --verbose",
-    "session-cleanup-quick": "node scripts/session-maintenance.js --inactive-hours 12 --delete-days 7",
-    "session-stats": "node scripts/session-maintenance.js --dry-run --verbose",
-    "session-cron": "node scripts/session-maintenance.js --cron",
-    "apply-session-cleanup": "node scripts/apply-session-cleanup.js",
-    "fix-permissions": "node scripts/fix-permissions.js",
-    "diagnose": "node scripts/diagnose.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "db:init": "node scripts/reinit-database.js",
+    "db:reset": "node scripts/reinit-database.js",
+    "db:clean": "node scripts/session-maintenance.js"
   },
   "keywords": ["music", "twitch", "spotify", "streaming", "session"],
   "author": "Le Vinyle Team",
