@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '../utils/api';
 
 export default function TrackSubmission({ token }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -135,18 +136,11 @@ export default function TrackSubmission({ token }) {
     }
 
     try {
-      const response = await fetch('/api/submit-track', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          spotify_url: track.spotify_url,
-          track_name: track.name,
-          message: message
-        })
-      });
+      const response = await api.post('/api/submit-track', {
+        spotify_url: track.spotify_url,
+        track_name: track.name,
+        message: message
+      }, token);
 
       if (!response.ok) {
         const data = await response.json();
@@ -184,17 +178,10 @@ export default function TrackSubmission({ token }) {
     }
 
     try {
-      const response = await fetch('/api/submit-track', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          spotify_url: spotifyLink,
-          message: message
-        })
-      });
+      const response = await api.post('/api/submit-track', {
+        spotify_url: spotifyLink,
+        message: message
+      }, token);
 
       if (!response.ok) {
         const data = await response.json();

@@ -63,9 +63,7 @@ export default function SessionRoom({ user, token, isTestMode }) {
         } else {
           // En mode production, vérifier dynamiquement si l'utilisateur est modérateur          
           try {
-            const apiUrl = `/api/users/${sessionData.streamer_id}/moderator-status`
-            const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
-            const modResponse = await fetch(apiUrl, { headers })
+            const modResponse = await api.get(`/api/users/${sessionData.streamer_id}/moderator-status`, token)
             
             if (modResponse.ok) {
               const modData = await modResponse.json()

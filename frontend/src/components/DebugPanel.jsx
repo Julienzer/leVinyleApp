@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '../utils/api';
 
 export default function DebugPanel() {
   const [debugInfo, setDebugInfo] = useState(null);
@@ -10,7 +11,7 @@ export default function DebugPanel() {
   const fetchDebugInfo = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/debug/tokens');
+      const response = await api.get('/api/auth/debug/tokens');
       const data = await response.json();
       setDebugInfo(data);
     } catch (error) {
@@ -25,7 +26,7 @@ export default function DebugPanel() {
     
     setLoading(true);
     try {
-      const response = await fetch(`/api/auth/debug/moderation/${testStreamerId}/${testUserId}`);
+      const response = await api.get(`/api/auth/debug/moderation/${testStreamerId}/${testUserId}`);
       const data = await response.json();
       setTestResult(data);
     } catch (error) {

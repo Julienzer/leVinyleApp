@@ -46,9 +46,7 @@ export default function ModeratorInterface({ session, user, token, isTestMode })
         setHistory(response.propositions)
       } else {
         // Utiliser les vraies API en mode production
-        const response = await fetch(`/api/sessions/${session.id}/propositions/history`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        const response = await api.get(`/api/sessions/${session.id}/propositions/history`, token)
         
         if (response.ok) {
           const data = await response.json()

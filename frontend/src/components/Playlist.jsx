@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import TrackCard from './TrackCard';
+import { api } from '../utils/api';
 
 export default function Playlist({ token, user }) {
   const [approvedTracks, setApprovedTracks] = useState([]);
@@ -8,8 +8,11 @@ export default function Playlist({ token, user }) {
 
   const fetchApprovedTracks = async () => {
     try {
-      const response = await axios.get('/api/approved');
-      setApprovedTracks(response.data);
+      const response = await api.get('/api/approved');
+      if (response.ok) {
+        const data = await response.json();
+        setApprovedTracks(data);
+      }
     } catch (err) {
       setError('Erreur lors du chargement de la playlist');
     }
@@ -26,9 +29,7 @@ export default function Playlist({ token, user }) {
   const handleApprove = async (trackId) => {
     if (!token) return;
     try {
-      await axios.post(`/api/track/${trackId}/approve`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/api/track/${trackId}/approve`, {}, token);
       fetchApprovedTracks();
     } catch (err) {
       setError('Erreur lors de la validation du morceau');
@@ -37,9 +38,7 @@ export default function Playlist({ token, user }) {
   const handleDelete = async (trackId) => {
     if (!token) return;
     try {
-      await axios.delete(`/api/track/${trackId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/api/track/${trackId}`, token);
       fetchApprovedTracks();
     } catch (err) {
       setError('Erreur lors de la suppression du morceau');

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import TrackCard from './TrackCard';
+import { api } from '../utils/api';
 
 export default function ModPanel({ token }) {
   const [pendingTracks, setPendingTracks] = useState([]);
@@ -13,12 +13,11 @@ export default function ModPanel({ token }) {
     }
 
     try {
-      const response = await axios.get('/api/pending', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      setPendingTracks(response.data);
+      const response = await api.get('/api/pending', token);
+      if (response.ok) {
+        const data = await response.json();
+        setPendingTracks(data);
+      }
     } catch (err) {
       if (err.response?.status === 401) {
         setError('Vous n\'êtes pas autorisé à accéder au panneau de modération');
@@ -40,11 +39,7 @@ export default function ModPanel({ token }) {
       return;
     }
     try {
-      await axios.post(`/api/track/${trackId}/approve`, {}, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      await api.post(`/api/track/${trackId}/approve`, {}, token);
       fetchPendingTracks();
     } catch (err) {
       if (err.response?.status === 401) {
@@ -63,11 +58,7 @@ export default function ModPanel({ token }) {
       return;
     }
     try {
-      await axios.delete(`/api/track/${trackId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      await api.delete(`/api/track/${trackId}`, token);
       fetchPendingTracks();
     } catch (err) {
       if (err.response?.status === 401) {

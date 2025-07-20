@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PlusIcon, MusicalNoteIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import { api } from '../utils/api';
 
 const PlaylistManager = ({ 
   user, 
@@ -48,11 +49,7 @@ const PlaylistManager = ({
         await new Promise(resolve => setTimeout(resolve, 500));
         setPlaylists(mockPlaylists);
       } else {
-        const response = await fetch('/api/playlists', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await api.get('/api/playlists', token);
         
         if (!response.ok) {
           throw new Error('Erreur lors du chargement des playlists');

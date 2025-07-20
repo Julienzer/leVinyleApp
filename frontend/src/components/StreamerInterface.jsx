@@ -135,16 +135,9 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
         await new Promise(resolve => setTimeout(resolve, 1000));
       } else {
         // Utiliser la vraie API Spotify
-        const response = await fetch(`/api/spotify/playlists/${selectedPlaylistId}/tracks/${trackId}`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-          },
-          body: JSON.stringify({
-            spotify_url: track.spotify_url
-          })
-        })
+        const response = await api.post(`/api/spotify/playlists/${selectedPlaylistId}/tracks/${trackId}`, {
+          spotify_url: track.spotify_url
+        }, token)
         
         if (!response.ok) {
           const data = await response.json()

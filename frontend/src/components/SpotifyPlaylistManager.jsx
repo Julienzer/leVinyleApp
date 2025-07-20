@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MusicalNoteIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { api } from '../utils/api';
 
 const SpotifyPlaylistManager = ({ 
   user, 
@@ -64,7 +65,7 @@ const SpotifyPlaylistManager = ({
         return;
       }
 
-      const response = await fetch('/api/auth/spotify/status');
+      const response = await api.get('/api/auth/spotify/status');
       const data = await response.json();
       
       console.log('🎵 Statut Spotify:', data);
@@ -91,11 +92,7 @@ const SpotifyPlaylistManager = ({
         await new Promise(resolve => setTimeout(resolve, 1000));
         setPlaylists(mockSpotifyPlaylists);
       } else {
-        const response = await fetch('/api/spotify/playlists', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await api.get('/api/spotify/playlists', token);
         
         if (!response.ok) {
           throw new Error('Erreur lors du chargement des playlists Spotify');
@@ -120,7 +117,8 @@ const SpotifyPlaylistManager = ({
     }
     
     // Rediriger vers l'authentification Spotify
-    window.location.href = '/api/auth/spotify';
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    window.location.href = `${apiUrl}/api/auth/spotify`;
   };
 
   if (!spotifyConnected) {
