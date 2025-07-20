@@ -130,6 +130,7 @@ function App() {
         console.log('🔄 [Frontend] spotifyRefreshKey incrémenté');
       } else if (spotifyError) {
         console.error('❌ [Frontend] Erreur Spotify OAuth:', decodeURIComponent(spotifyError));
+        console.log('🔍 [Frontend] Erreur Spotify OAuth:', JSON.stringify(spotifyError, null, 2));
         setNotification({
           type: 'error',
           message: `Erreur Spotify : ${decodeURIComponent(spotifyError)}`
