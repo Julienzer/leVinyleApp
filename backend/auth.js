@@ -2,7 +2,6 @@ const express = require('express');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
-const spotifyApi = require('spotify-web-api-node');
 const User = require('./models/User');
 
 require('dotenv').config();
@@ -313,10 +312,16 @@ function safeErrorToString(error, defaultMessage = 'Erreur inconnue') {
   console.log('🔧 [Backend] === CONVERSION ERREUR SÉCURISÉE ===');
   console.log('🔧 [Backend] Type erreur reçu:', typeof error);
   console.log('🔧 [Backend] Erreur brute:', error);
+  console.log('🔧 [Backend] Constructor name:', error?.constructor?.name);
+  console.log('🔧 [Backend] Message brut:', error?.message);
   
-  // Si c'est déjà une string, la retourner
+  // Si c'est déjà une string, la retourner SAUF si c'est "[object Object]"
   if (typeof error === 'string' && error.trim().length > 0) {
-    console.log('✅ [Backend] Erreur déjà string:', error);
+    if (error === '[object Object]') {
+      console.log('⚠️ [Backend] Erreur string "[object Object]" détectée, conversion nécessaire');
+      return 'Erreur d\'authentification Spotify';
+    }
+    console.log('✅ [Backend] Erreur déjà string valide:', error);
     return error;
   }
   
@@ -324,37 +329,134 @@ function safeErrorToString(error, defaultMessage = 'Erreur inconnue') {
   if (error && typeof error === 'object') {
     console.log('🔍 [Backend] Analyse objet erreur...');
     
-    // Essayer error.message
+    // Gestion spéciale pour WebapiError de spotify-web-api-node (avec plusieurs checks)
+    const isWebapiError = (
+      (error.constructor && error.constructor.name === 'WebapiError') ||
+      error.statusCode !== undefined ||
+      (error.body !== undefined && error.headers !== undefined) ||
+      (error.message && error.message.includes && error.message.includes('WebapiError'))
+    );
+    
+    if (isWebapiError) {
+      console.log('🎵 [Backend] WebapiError détectée de Spotify (via multiple checks)');
+      console.log('🎵 [Backend] StatusCode:', error.statusCode);
+      console.log('🎵 [Backend] Body empty:', !error.body || Object.keys(error.body).length === 0);
+      
+      // Gestion spécifique pour les erreurs 403 Spotify
+      if (error.statusCode === 403) {
+        console.log('🚫 [Backend] Erreur 403 Spotify détectée');
+        
+        // Si le body est vide, c'est probablement un problème de permissions
+        if (!error.body || Object.keys(error.body).length === 0) {
+          console.log('✅ [Backend] Erreur 403 avec body vide → permissions Spotify');
+          return 'Accès refusé par Spotify - Vérifiez vos permissions ou réessayez plus tard';
+        }
+      }
+      
+      // Gestion spécifique pour les erreurs 400/401
+      if (error.statusCode === 400) {
+        return 'Requête Spotify invalide - Vérifiez la configuration';
+      }
+      if (error.statusCode === 401) {
+        return 'Token Spotify invalide ou expiré';
+      }
+      if (error.statusCode === 429) {
+        return 'Trop de requêtes Spotify - Veuillez réessayer plus tard';
+      }
+      if (error.statusCode === 500) {
+        return 'Erreur serveur Spotify - Réessayez plus tard';
+      }
+      
+      // Essayer d'extraire les données de l'erreur Spotify
+      if (error.body && typeof error.body === 'object') {
+        console.log('🔍 [Backend] Body WebapiError:', error.body);
+        
+        // Si le body a une propriété error avec description
+        if (error.body.error) {
+          if (error.body.error.message && error.body.error.message !== '[object Object]') {
+            console.log('✅ [Backend] Message extrait du body.error:', error.body.error.message);
+            return error.body.error.message;
+          }
+          if (error.body.error_description && error.body.error_description !== '[object Object]') {
+            console.log('✅ [Backend] Description extraite du body:', error.body.error_description);
+            return error.body.error_description;
+          }
+          if (typeof error.body.error === 'string' && error.body.error !== '[object Object]') {
+            console.log('✅ [Backend] Error string extrait du body:', error.body.error);
+            return error.body.error;
+          }
+        }
+        
+        // Essayer error_description directement dans body
+        if (error.body.error_description && error.body.error_description !== '[object Object]') {
+          console.log('✅ [Backend] Error_description direct du body:', error.body.error_description);
+          return error.body.error_description;
+        }
+      }
+      
+      // Essayer le statusCode pour les erreurs HTTP
+      if (error.statusCode) {
+        const httpMessage = `Erreur Spotify HTTP ${error.statusCode}`;
+        console.log('✅ [Backend] Code statut WebapiError:', httpMessage);
+        return httpMessage;
+      }
+      
+      // Fallback pour WebapiError
+      console.log('⚠️ [Backend] WebapiError sans détails exploitables');
+      return 'Erreur de communication avec Spotify';
+    }
+    
+    // Essayer error.message (cas général) - avec filtrage [object Object]
     if (error.message && typeof error.message === 'string') {
-      console.log('✅ [Backend] Message extrait:', error.message);
-      return error.message;
+      // Éviter les messages "[object Object]"
+      if (error.message !== '[object Object]') {
+        console.log('✅ [Backend] Message extrait:', error.message);
+        return error.message;
+      } else {
+        console.log('⚠️ [Backend] Message est [object Object], continuons...');
+      }
     }
     
     // Essayer error.error (pour les erreurs Spotify)
-    if (error.error && typeof error.error === 'string') {
+    if (error.error && typeof error.error === 'string' && error.error !== '[object Object]') {
       console.log('✅ [Backend] Error.error extrait:', error.error);
       return error.error;
     }
     
     // Essayer error.error_description (pour OAuth)
-    if (error.error_description && typeof error.error_description === 'string') {
+    if (error.error_description && typeof error.error_description === 'string' && error.error_description !== '[object Object]') {
       console.log('✅ [Backend] Error_description extrait:', error.error_description);
       return error.error_description;
+    }
+    
+    // Essayer les propriétés de réponse HTTP
+    if (error.response && error.response.body) {
+      console.log('🔍 [Backend] Analyse response.body...');
+      
+      if (error.response.body.error_description && error.response.body.error_description !== '[object Object]') {
+        console.log('✅ [Backend] Error_description de response.body:', error.response.body.error_description);
+        return error.response.body.error_description;
+      }
+      
+      if (error.response.body.error && typeof error.response.body.error === 'string' && error.response.body.error !== '[object Object]') {
+        console.log('✅ [Backend] Error de response.body:', error.response.body.error);
+        return error.response.body.error;
+      }
     }
     
     // Si l'objet a une méthode toString personnalisée
     if (error.toString && typeof error.toString === 'function') {
       const toStringResult = error.toString();
-      if (toStringResult !== '[object Object]' && toStringResult !== 'Error') {
+      if (toStringResult !== '[object Object]' && toStringResult !== 'Error' && toStringResult !== 'WebapiError: [object Object]') {
         console.log('✅ [Backend] ToString utilisé:', toStringResult);
         return toStringResult;
       }
     }
     
-    // Essayer JSON.stringify comme dernier recours
+    // Essayer JSON.stringify comme dernier recours pour les objets simples
     try {
       const jsonString = JSON.stringify(error);
-      if (jsonString && jsonString !== '{}' && jsonString !== 'null') {
+      if (jsonString && jsonString !== '{}' && jsonString !== 'null' && !jsonString.includes('[object Object]')) {
         console.log('✅ [Backend] JSON stringify utilisé:', jsonString);
         return `Erreur: ${jsonString}`;
       }
@@ -459,27 +561,48 @@ router.get('/spotify/callback', async (req, res) => {
     });
   }
 
-  console.log('🔍 [Backend] === INITIALISATION API SPOTIFY ===');
-  const api = new spotifyApi({
-    clientId: process.env.SPOTIFY_CLIENT_ID,
-    clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-    redirectUri: process.env.SPOTIFY_REDIRECT_URI,
-  });
+  console.log('🔍 [Backend] === VÉRIFICATION CONFIGURATION SPOTIFY ===');
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
   
-  console.log('🔍 [Backend] SpotifyApi configuré:', {
-    clientId: process.env.SPOTIFY_CLIENT_ID ? `${process.env.SPOTIFY_CLIENT_ID.substring(0, 10)}...` : 'MANQUANT',
-    hasClientSecret: !!process.env.SPOTIFY_CLIENT_SECRET,
-    redirectUri: process.env.SPOTIFY_REDIRECT_URI
+  console.log('🔍 [Backend] Configuration Spotify:', {
+    clientId: clientId ? `${clientId.substring(0, 10)}...` : 'MANQUANT',
+    hasClientSecret: !!clientSecret,
+    redirectUri: redirectUri
   });
 
+  if (!clientId || !clientSecret || !redirectUri) {
+    console.error('❌ [Backend] Configuration Spotify incomplète');
+    const errorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent('Configuration Spotify manquante')}`;
+    return res.redirect(errorUrl);
+  }
+
   try {
-    console.log('🔄 [Backend] === ÉCHANGE CODE CONTRE TOKENS ===');
-    console.log('🔄 [Backend] Tentative d\'échange du code...');
+    console.log('🔄 [Backend] === ÉCHANGE CODE CONTRE TOKENS (AXIOS) ===');
+    console.log('🔄 [Backend] Méthode: Axios directement comme Twitch');
     
-    const data = await api.authorizationCodeGrant(code);
-    const access_token = data.body['access_token'];
-    const refresh_token = data.body['refresh_token'];
-    const expires_in = data.body['expires_in'];
+    // ÉCHANGE DE TOKENS - MÉTHODE AXIOS (comme Twitch)
+    const tokenResponse = await axios.post('https://accounts.spotify.com/api/token', null, {
+      params: {
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+        client_secret: clientSecret
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    console.log('✅ [Backend] Réponse tokens Spotify (axios):', {
+      status: tokenResponse.status,
+      statusText: tokenResponse.statusText,
+      hasData: !!tokenResponse.data
+    });
+
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
     
     console.log('✅ [Backend] Tokens reçus de Spotify:', {
       hasAccessToken: !!access_token,
@@ -490,29 +613,41 @@ router.get('/spotify/callback', async (req, res) => {
       expiresAt: new Date(Date.now() + expires_in * 1000).toISOString()
     });
     
-    console.log('🔑 [Backend] === RÉCUPÉRATION PROFIL SPOTIFY ===');
-    api.setAccessToken(access_token);
-    console.log('🔑 [Backend] Token d\'accès configuré, récupération profil...');
+    console.log('🔑 [Backend] === RÉCUPÉRATION PROFIL SPOTIFY (AXIOS) ===');
+    console.log('🔑 [Backend] Méthode: Axios directement comme Twitch');
     
-    const me = await api.getMe();
+    // RÉCUPÉRATION PROFIL - MÉTHODE AXIOS (comme Twitch)
+    const userResponse = await axios.get('https://api.spotify.com/v1/me', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`
+      }
+    });
+
+    console.log('✅ [Backend] Réponse profil Spotify (axios):', {
+      status: userResponse.status,
+      statusText: userResponse.statusText,
+      hasData: !!userResponse.data
+    });
+
+    const me = userResponse.data;
     console.log('✅ [Backend] Profil Spotify récupéré:', {
-      id: me.body.id,
-      display_name: me.body.display_name,
-      email: me.body.email,
-      country: me.body.country,
-      hasImages: me.body.images && me.body.images.length > 0,
-      imageUrl: me.body.images && me.body.images.length > 0 ? me.body.images[0].url : null,
-      followers: me.body.followers ? me.body.followers.total : 0,
-      product: me.body.product
+      id: me.id,
+      display_name: me.display_name,
+      email: me.email,
+      country: me.country,
+      hasImages: me.images && me.images.length > 0,
+      imageUrl: me.images && me.images.length > 0 ? me.images[0].url : null,
+      followers: me.followers ? me.followers.total : 0,
+      product: me.product
     });
     
     const spotifyData = {
-      spotify_id: me.body.id,
+      spotify_id: me.id,
       spotify_access_token: access_token,
       spotify_refresh_token: refresh_token,
       expires_in: expires_in,
-      display_name: me.body.display_name,
-      profile_picture: me.body.images && me.body.images.length > 0 ? me.body.images[0].url : null
+      display_name: me.display_name,
+      profile_picture: me.images && me.images.length > 0 ? me.images[0].url : null
     };
     
     console.log('💾 [Backend] === DONNÉES SPOTIFY À STOCKER ===');
@@ -536,7 +671,7 @@ router.get('/spotify/callback', async (req, res) => {
         console.log('✅ [Backend] Utilisateur:', twitchUserName, '(ID:', twitchUserId, ')');
         
         // Rediriger avec succès et nom d'utilisateur
-        const successUrl = `${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=true`;
+        const successUrl = `${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.display_name)}&linked_to_twitch=true`;
         console.log('✅ [Backend] === SUCCÈS AVEC LIAISON TWITCH ===');
         console.log('✅ [Backend] Redirection vers:', successUrl);
         return res.redirect(successUrl);
@@ -554,19 +689,20 @@ router.get('/spotify/callback', async (req, res) => {
 
     // Si pas de compte Twitch ou erreur de liaison, succès simple
     console.log('✅ [Backend] === SUCCÈS SPOTIFY SIMPLE ===');
-    console.log('✅ [Backend] Utilisateur Spotify authentifié sans lien Twitch:', me.body.display_name);
+    console.log('✅ [Backend] Utilisateur Spotify authentifié sans lien Twitch:', me.display_name);
     
-    const simpleSuccessUrl = `${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=false`;
+    const simpleSuccessUrl = `${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.display_name)}&linked_to_twitch=false`;
     console.log('✅ [Backend] Redirection vers:', simpleSuccessUrl);
     res.redirect(simpleSuccessUrl);
     
   } catch (err) {
-    console.error('❌ [Backend] === ERREUR OAUTH SPOTIFY ===');
+    console.error('❌ [Backend] === ERREUR OAUTH SPOTIFY (AXIOS) ===');
     console.error('❌ [Backend] Type erreur:', typeof err);
     console.error('❌ [Backend] Erreur complète:', err);
     console.error('❌ [Backend] Message erreur:', err.message);
     console.error('❌ [Backend] Stack erreur:', err.stack);
     
+    // Gestion d'erreur pour axios (comme Twitch)
     if (err.response) {
       console.error('❌ [Backend] Réponse HTTP erreur:', {
         status: err.response.status,
@@ -574,16 +710,46 @@ router.get('/spotify/callback', async (req, res) => {
         data: err.response.data,
         headers: err.response.headers
       });
+      
+      // Gérer les codes d'erreur HTTP spécifiques
+      let errorMessage = 'Erreur lors de l\'authentification Spotify';
+      
+      if (err.response.status === 400) {
+        errorMessage = 'Requête Spotify invalide - Code d\'autorisation incorrect';
+      } else if (err.response.status === 401) {
+        errorMessage = 'Identifiants Spotify invalides';
+      } else if (err.response.status === 403) {
+        errorMessage = 'Accès refusé par Spotify - Vérifiez vos permissions';
+      } else if (err.response.status === 429) {
+        errorMessage = 'Trop de requêtes Spotify - Réessayez plus tard';
+      } else if (err.response.status === 500) {
+        errorMessage = 'Erreur serveur Spotify - Réessayez plus tard';
+      } else {
+        errorMessage = `Erreur Spotify HTTP ${err.response.status}`;
+      }
+      
+      // Essayer d'extraire plus de détails de la réponse
+      if (err.response.data && typeof err.response.data === 'object') {
+        if (err.response.data.error_description) {
+          errorMessage = err.response.data.error_description;
+        } else if (err.response.data.error && typeof err.response.data.error === 'string') {
+          errorMessage = err.response.data.error;
+        } else if (err.response.data.message) {
+          errorMessage = err.response.data.message;
+        }
+      }
+      
+      console.log('📝 [Backend] Message d\'erreur HTTP final:', errorMessage);
+      
+      const finalErrorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`;
+      console.error('❌ [Backend] === REDIRECTION ERREUR FINALE ===');
+      console.error('❌ [Backend] URL erreur finale:', finalErrorUrl);
+      return res.redirect(finalErrorUrl);
     }
     
-    if (err.body) {
-      console.error('❌ [Backend] Body erreur Spotify:', err.body);
-    }
-    
-    // Utiliser la fonction de conversion sécurisée pour toutes les erreurs
-    const errorMessage = safeErrorToString(err, 'Erreur lors de l\'authentification Spotify');
-    console.log('📝 [Backend] Message d\'erreur final après conversion:', errorMessage);
-    console.log('📝 [Backend] Type du message final:', typeof errorMessage);
+    // Autres types d'erreurs (réseau, etc.)
+    const errorMessage = err.message || 'Erreur de connexion à Spotify';
+    console.log('📝 [Backend] Message d\'erreur général final:', errorMessage);
     
     const finalErrorUrl = `${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`;
     console.error('❌ [Backend] === REDIRECTION ERREUR FINALE ===');
@@ -1008,27 +1174,19 @@ router.get('/debug/spotify', (req, res) => {
     frontendUrl: config.frontendUrl
   });
   
-  // Test de l'API Spotify
-  let spotifyApiStatus = 'non-testé';
-  try {
-    const SpotifyWebApi = require('spotify-web-api-node');
-    const spotifyApi = new SpotifyWebApi({
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
-      redirectUri: config.redirectUri,
-    });
-    spotifyApiStatus = 'configuré';
-  } catch (error) {
-    spotifyApiStatus = `erreur: ${error.message}`;
-  }
+  // Test de l'API Spotify avec axios (plus de spotify-web-api-node)
+  let spotifyApiStatus = 'axios prêt (plus de dépendance spotify-web-api-node)';
   
   const debugInfo = {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     ...configStatus,
     spotifyApiStatus,
+    method: 'axios_direct_like_twitch',
     urls: {
       authUrl: config.clientId ? `https://accounts.spotify.com/authorize?client_id=${config.clientId}` : 'impossible - pas de client_id',
+      tokenUrl: 'https://accounts.spotify.com/api/token',
+      userUrl: 'https://api.spotify.com/v1/me',
       callbackUrl: config.redirectUri || 'non configuré',
       frontendUrl: config.frontendUrl || 'non configuré'
     },
