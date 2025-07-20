@@ -55,11 +55,13 @@ services:
       - key: SPOTIFY_REDIRECT_URI
         value: https://levinyle-backend.onrender.com/api/auth/spotify/callback
 
-  # Frontend Static Site
-  - type: static
+  # Frontend Web Service (serving static files)
+  - type: web
     name: levinyle-frontend
+    env: node
+    plan: free
     buildCommand: cd frontend && npm install && npm run build
-    publishPath: frontend/dist
+    startCommand: cd frontend && npx serve -s dist -l 3000
     envVars:
       - key: VITE_API_URL
         value: https://levinyle-backend.onrender.com
