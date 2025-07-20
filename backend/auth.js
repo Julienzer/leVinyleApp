@@ -9,16 +9,8 @@ require('dotenv').config();
 
 const router = express.Router();
 
-// Middleware session
-router.use(session({
-  secret: process.env.JWT_SECRET || 'supersecret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,
-    maxAge: 24 * 60 * 60 * 1000
-  }
-}));
+// Session configuration is handled globally in server.js
+// No need for separate session config here
 
 // Session error handling
 router.use((req, res, next) => {
