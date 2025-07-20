@@ -56,12 +56,10 @@ services:
         value: https://levinyle-backend.onrender.com/api/auth/spotify/callback
 
   # Frontend Static Site
-  - type: web
+  - type: static
     name: levinyle-frontend
-    env: static
-    plan: free
     buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
+    publishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
         value: https://levinyle-backend.onrender.com
