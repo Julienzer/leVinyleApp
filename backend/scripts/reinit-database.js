@@ -2,6 +2,7 @@
 
 /**
  * Script de réinitialisation complète de la base de données
+ * IMPORTANT: Spotify n'est plus stocké en base - tokens gérés en mémoire comme Twitch
  * Usage: node backend/scripts/reinit-database.js
  */
 

@@ -1,6 +1,6 @@
 -- ===== SCRIPT DE RÉINITIALISATION COMPLÈTE =====
 -- Supprime et recrée toute la base de données Le Vinyle
--- Version mise à jour avec support complet Spotify
+-- Version mise à jour SANS support Spotify (stockage en mémoire comme Twitch)
 
 -- Supprimer toutes les tables existantes (ordre important à cause des clés étrangères)
 DROP TABLE IF EXISTS playlist_tracks CASCADE;
@@ -21,7 +21,7 @@ DROP FUNCTION IF EXISTS get_session_cleanup_stats() CASCADE;
 
 -- ===== RECRÉATION DE LA STRUCTURE COMPLÈTE =====
 
--- ===== TABLE USERS (avec colonnes Spotify complètes) =====
+-- ===== TABLE USERS (SANS colonnes Spotify - stockage en mémoire comme Twitch) =====
 CREATE TABLE users (
     id VARCHAR(255) PRIMARY KEY,  -- ID Twitch
     display_name VARCHAR(255) NOT NULL,
@@ -29,19 +29,11 @@ CREATE TABLE users (
     role VARCHAR(50) DEFAULT 'viewer',  -- viewer, moderator, streamer
     is_streamer BOOLEAN DEFAULT FALSE,
     
-    -- Informations de base Spotify
-    spotify_id VARCHAR(255),
+    -- SPOTIFY SUPPRIMÉ : Tous les tokens et données Spotify sont maintenant stockés en mémoire
+    -- Plus de colonnes spotify_* dans la base de données
     
-    -- Tokens Spotify (ajout des colonnes manquantes)
-    spotify_access_token TEXT,
-    spotify_refresh_token TEXT,
-    spotify_token_expires_at TIMESTAMP,
-    spotify_connected_at TIMESTAMP,
-    
-    -- Profils et métadonnées
+    -- Profil Twitch uniquement
     profile_picture VARCHAR(512),  -- URL photo profil Twitch
-    spotify_profile_picture VARCHAR(512),  -- URL photo profil Spotify
-    spotify_display_name VARCHAR(255),  -- Nom d'affichage Spotify
     
     -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -197,163 +189,172 @@ UPDATE sessions
 SET last_activity = updated_at 
 WHERE last_activity IS NULL;
 
--- Index pour optimiser les requêtes de nettoyage
+-- ===== INDEX POUR NETTOYAGE AUTOMATIQUE =====
 CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_auto_cleanup ON sessions(auto_cleanup);
 
--- Fonction pour mettre à jour last_activity automatiquement
-CREATE OR REPLACE FUNCTION update_session_activity()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Mettre à jour last_activity quand une proposition est créée/modifiée
-    UPDATE sessions 
-    SET last_activity = CURRENT_TIMESTAMP 
-    WHERE id = NEW.session_id;
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE 'plpgsql';
-
--- Triggers pour mettre à jour l'activité automatiquement
-DROP TRIGGER IF EXISTS update_activity_on_proposition ON propositions;
-CREATE TRIGGER update_activity_on_proposition
-    AFTER INSERT OR UPDATE ON propositions
-    FOR EACH ROW EXECUTE FUNCTION update_session_activity();
+-- ===== FONCTION DE NETTOYAGE AUTOMATIQUE =====
 
 -- Fonction pour nettoyer les sessions inactives
 CREATE OR REPLACE FUNCTION cleanup_inactive_sessions(
     inactive_hours INTEGER DEFAULT 24,
-    delete_old_days INTEGER DEFAULT 30
+    max_sessions_to_delete INTEGER DEFAULT 100
 )
-RETURNS TABLE (
-    action TEXT,
-    session_count INTEGER,
-    details TEXT
+RETURNS TABLE(
+    deleted_sessions INTEGER,
+    deleted_propositions INTEGER,
+    deleted_history INTEGER
 ) AS $$
 DECLARE
-    deactivated_count INTEGER;
-    deleted_count INTEGER;
+    cutoff_time TIMESTAMP;
+    session_ids INTEGER[];
+    deleted_sessions_count INTEGER;
+    deleted_propositions_count INTEGER;
+    deleted_history_count INTEGER;
 BEGIN
-    -- 1. Désactiver les sessions inactives (plus de X heures sans activité)
-    UPDATE sessions 
-    SET active = FALSE, updated_at = CURRENT_TIMESTAMP
-    WHERE active = TRUE 
-      AND auto_cleanup = TRUE
-      AND last_activity < (CURRENT_TIMESTAMP - (inactive_hours || ' hours')::INTERVAL);
+    -- Calculer la date limite
+    cutoff_time := CURRENT_TIMESTAMP - INTERVAL '1 hour' * inactive_hours;
     
-    GET DIAGNOSTICS deactivated_count = ROW_COUNT;
+    -- Identifier les sessions à supprimer
+    SELECT ARRAY(
+        SELECT id 
+        FROM sessions 
+        WHERE auto_cleanup = TRUE 
+        AND (
+            last_activity < cutoff_time 
+            OR (expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP)
+        )
+        LIMIT max_sessions_to_delete
+    ) INTO session_ids;
     
-    -- 2. Supprimer les sessions très anciennes (plus de X jours)
+    -- Supprimer l'historique associé
+    DELETE FROM session_history 
+    WHERE session_id = ANY(session_ids);
+    GET DIAGNOSTICS deleted_history_count = ROW_COUNT;
+    
+    -- Supprimer les propositions associées
+    DELETE FROM propositions 
+    WHERE session_id = ANY(session_ids);
+    GET DIAGNOSTICS deleted_propositions_count = ROW_COUNT;
+    
+    -- Supprimer les sessions
     DELETE FROM sessions 
-    WHERE auto_cleanup = TRUE
-      AND active = FALSE 
-      AND updated_at < (CURRENT_TIMESTAMP - (delete_old_days || ' days')::INTERVAL);
+    WHERE id = ANY(session_ids);
+    GET DIAGNOSTICS deleted_sessions_count = ROW_COUNT;
     
-    GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    
-    -- Retourner les résultats
-    RETURN QUERY VALUES 
-        ('deactivated', deactivated_count, format('Sessions désactivées après %s heures d''inactivité', inactive_hours)),
-        ('deleted', deleted_count, format('Sessions supprimées après %s jours', delete_old_days));
+    -- Retourner les statistiques
+    RETURN QUERY SELECT 
+        deleted_sessions_count, 
+        deleted_propositions_count, 
+        deleted_history_count;
 END;
-$$ LANGUAGE 'plpgsql';
+$$ LANGUAGE plpgsql;
 
--- Fonction pour obtenir les statistiques des sessions
+-- Fonction pour mettre à jour l'activité d'une session
+CREATE OR REPLACE FUNCTION update_session_activity(session_code VARCHAR)
+RETURNS BOOLEAN AS $$
+BEGIN
+    UPDATE sessions 
+    SET last_activity = CURRENT_TIMESTAMP 
+    WHERE code = session_code AND active = TRUE;
+    
+    RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Fonction pour obtenir les statistiques de nettoyage
 CREATE OR REPLACE FUNCTION get_session_cleanup_stats()
-RETURNS TABLE (
+RETURNS TABLE(
     total_sessions INTEGER,
     active_sessions INTEGER,
     inactive_sessions INTEGER,
-    old_sessions INTEGER,
-    cleanup_candidates INTEGER
+    expired_sessions INTEGER,
+    auto_cleanup_enabled INTEGER
 ) AS $$
 BEGIN
-    RETURN QUERY
-    SELECT 
-        (SELECT COUNT(*)::INTEGER FROM sessions) as total_sessions,
-        (SELECT COUNT(*)::INTEGER FROM sessions WHERE active = TRUE) as active_sessions,
-        (SELECT COUNT(*)::INTEGER FROM sessions WHERE active = FALSE) as inactive_sessions,
-        (SELECT COUNT(*)::INTEGER FROM sessions WHERE updated_at < CURRENT_TIMESTAMP - INTERVAL '30 days') as old_sessions,
+    RETURN QUERY SELECT 
+        (SELECT COUNT(*)::INTEGER FROM sessions),
+        (SELECT COUNT(*)::INTEGER FROM sessions WHERE active = TRUE),
         (SELECT COUNT(*)::INTEGER FROM sessions 
          WHERE auto_cleanup = TRUE 
-           AND (
-               (active = TRUE AND last_activity < CURRENT_TIMESTAMP - INTERVAL '24 hours') OR
-               (active = FALSE AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 days')
-           )
-        ) as cleanup_candidates;
+         AND last_activity < CURRENT_TIMESTAMP - INTERVAL '24 hours'),
+        (SELECT COUNT(*)::INTEGER FROM sessions 
+         WHERE expires_at IS NOT NULL 
+         AND expires_at < CURRENT_TIMESTAMP),
+        (SELECT COUNT(*)::INTEGER FROM sessions WHERE auto_cleanup = TRUE);
 END;
-$$ LANGUAGE 'plpgsql';
+$$ LANGUAGE plpgsql;
 
--- Vue pour les sessions à nettoyer
-CREATE OR REPLACE VIEW sessions_cleanup_view AS
+-- ===== VUE POUR SURVEILLANCE =====
+CREATE VIEW sessions_cleanup_view AS
 SELECT 
-    s.id,
-    s.code,
-    s.name,
-    s.streamer_id,
-    u.display_name as streamer_name,
-    s.active,
-    s.created_at,
-    s.updated_at,
-    s.last_activity,
-    s.auto_cleanup,
-    EXTRACT(HOURS FROM (CURRENT_TIMESTAMP - s.last_activity)) as hours_inactive,
-    EXTRACT(DAYS FROM (CURRENT_TIMESTAMP - s.updated_at)) as days_old,
+    id,
+    code,
+    name,
+    active,
+    auto_cleanup,
+    last_activity,
+    expires_at,
     CASE 
-        WHEN s.active = TRUE AND s.last_activity < CURRENT_TIMESTAMP - INTERVAL '24 hours' THEN 'À désactiver'
-        WHEN s.active = FALSE AND s.updated_at < CURRENT_TIMESTAMP - INTERVAL '30 days' THEN 'À supprimer'
-        ELSE 'Actif'
-    END as cleanup_status,
-    (SELECT COUNT(*) FROM propositions WHERE session_id = s.id) as total_propositions
-FROM sessions s
-JOIN users u ON s.streamer_id = u.id
-ORDER BY s.last_activity DESC;
+        WHEN expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP THEN 'expired'
+        WHEN last_activity < CURRENT_TIMESTAMP - INTERVAL '24 hours' THEN 'inactive'
+        ELSE 'active'
+    END as status,
+    EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_activity))/3600 as hours_since_activity
+FROM sessions
+ORDER BY last_activity DESC;
 
--- ===== DONNÉES DE TEST =====
--- Insérer des utilisateurs de test
-INSERT INTO users (id, display_name, role, is_streamer, email) VALUES
-    ('test_streamer', 'TestStreamer', 'streamer', TRUE, 'streamer@test.com'),
-    ('test_moderator', 'TestModerator', 'moderator', FALSE, 'moderator@test.com'),
-    ('test_viewer', 'TestViewer', 'viewer', FALSE, 'viewer@test.com')
-ON CONFLICT (id) DO NOTHING;
+-- ===== DONNÉES DE TEST (optionnel) =====
+-- Utilisateur de test
+INSERT INTO users (id, display_name, email, role, is_streamer, profile_picture) VALUES 
+('test_streamer_123', 'TestStreamer', 'streamer@test.com', 'streamer', TRUE, 'https://static-cdn.jtvnw.net/jtv_user_pictures/test-profile-image.png'),
+('test_moderator_456', 'TestModerator', 'moderator@test.com', 'moderator', FALSE, 'https://static-cdn.jtvnw.net/jtv_user_pictures/mod-profile-image.png'),
+('test_viewer_789', 'TestViewer', 'viewer@test.com', 'viewer', FALSE, 'https://static-cdn.jtvnw.net/jtv_user_pictures/viewer-profile-image.png')
+ON CONFLICT (id) DO UPDATE SET
+    display_name = EXCLUDED.display_name,
+    email = EXCLUDED.email,
+    role = EXCLUDED.role,
+    is_streamer = EXCLUDED.is_streamer,
+    profile_picture = EXCLUDED.profile_picture,
+    updated_at = CURRENT_TIMESTAMP;
 
--- Insérer des sessions de test
-INSERT INTO sessions (code, name, streamer_id, is_private, prevent_duplicates, queue_mode) VALUES
-    ('test123', 'Session Test de Julien', 'test_streamer', FALSE, TRUE, 'chronological'),
-    ('private456', 'Session Privée', 'test_streamer', TRUE, FALSE, 'random')
-ON CONFLICT (code) DO NOTHING;
-
--- Insérer des propositions de test
-INSERT INTO propositions (session_id, viewer_id, spotify_url, track_name, artist, album, duration, message, status, created_at, moderated_at, moderator_id) VALUES
-    (1, 'test_viewer', 'https://open.spotify.com/track/fugees-fu-gee-la', 'Fugees - Fu-Gee-La', 'Fugees', 'The Score', '3:56', 'Un classique du hip-hop !', 'pending', NOW() - INTERVAL '10 minutes', NULL, NULL),
-    (1, 'test_viewer', 'https://open.spotify.com/track/kendrick-swimming-pools', 'Kendrick Lamar - Swimming Pools (Drank)', 'Kendrick Lamar', 'good kid, m.A.A.d city', '5:13', 'Pour l''ambiance !', 'approved', NOW() - INTERVAL '15 minutes', NOW() - INTERVAL '5 minutes', 'test_moderator'),
-    (1, 'test_viewer', 'https://open.spotify.com/track/nas-ny-state-of-mind', 'Nas - N.Y. State of Mind', 'Nas', 'Illmatic', '4:54', '', 'rejected', NOW() - INTERVAL '20 minutes', NOW() - INTERVAL '8 minutes', 'test_moderator'),
-    (1, 'test_viewer', 'https://open.spotify.com/track/wu-tang-cream', 'Wu-Tang Clan - C.R.E.A.M.', 'Wu-Tang Clan', 'Enter the Wu-Tang (36 Chambers)', '4:12', 'Cash Rules Everything Around Me', 'added', NOW() - INTERVAL '30 minutes', NOW() - INTERVAL '25 minutes', 'test_moderator'),
-    (1, 'test_viewer', 'https://open.spotify.com/track/outkast-ms-jackson', 'OutKast - Ms. Jackson', 'OutKast', 'Stankonia', '4:30', 'Un tube intemporel', 'pending', NOW() - INTERVAL '5 minutes', NULL, NULL),
-    (1, 'test_viewer', 'https://open.spotify.com/track/tribe-scenario', 'A Tribe Called Quest - Scenario', 'A Tribe Called Quest', 'The Low End Theory', '4:10', 'Jazz rap à son meilleur', 'approved', NOW() - INTERVAL '12 minutes', NOW() - INTERVAL '3 minutes', 'test_moderator')
-ON CONFLICT DO NOTHING;
+-- Session de test
+INSERT INTO sessions (code, name, streamer_id, is_private, prevent_duplicates, queue_mode) VALUES 
+('test', 'Session de Test', 'test_streamer_123', FALSE, TRUE, 'chronological'),
+('julien', 'Session Julien', 'test_streamer_123', FALSE, TRUE, 'chronological')
+ON CONFLICT (code) DO UPDATE SET
+    name = EXCLUDED.name,
+    streamer_id = EXCLUDED.streamer_id,
+    is_private = EXCLUDED.is_private,
+    prevent_duplicates = EXCLUDED.prevent_duplicates,
+    queue_mode = EXCLUDED.queue_mode,
+    updated_at = CURRENT_TIMESTAMP;
 
 -- Relation modérateur
-INSERT INTO moderators (streamer_id, moderator_id) VALUES
-    ('test_streamer', 'test_moderator')
+INSERT INTO moderators (streamer_id, moderator_id) VALUES 
+('test_streamer_123', 'test_moderator_456')
 ON CONFLICT (streamer_id, moderator_id) DO NOTHING;
 
--- ===== DONNÉES DE TEST PLAYLISTS =====
--- Insérer des playlists de test
-INSERT INTO playlists (id, name, description, streamer_id, tracks_count, created_at, updated_at) VALUES
-    ('playlist-1', 'Session Live Stream', 'Morceaux de ma session en direct', 'test_streamer', 2, NOW(), NOW()),
-    ('playlist-2', 'Viewer Favorites', 'Les coups de cœur des viewers', 'test_streamer', 1, NOW(), NOW()),
-    ('playlist-3', 'Chill Vibes', 'Playlist détente pour les moments calmes', 'test_streamer', 0, NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
+-- Propositions de test
+INSERT INTO propositions (session_id, viewer_id, spotify_url, track_name, artist, album, duration, message, status) 
+SELECT 
+    s.id,
+    'test_viewer_789',
+    'https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh',
+    'Never Gonna Give You Up',
+    'Rick Astley',
+    'Whenever You Need Somebody',
+    '3:33',
+    'Un classique indémodable !',
+    'pending'
+FROM sessions s WHERE s.code = 'test'
+ON CONFLICT DO NOTHING;
 
--- Exemples de morceaux dans les playlists (liés aux propositions existantes)
-INSERT INTO playlist_tracks (id, playlist_id, track_id, added_at) VALUES
-    ('pt-1', 'playlist-1', 4, NOW() - INTERVAL '20 minutes'),  -- Wu-Tang Clan dans Session Live Stream
-    ('pt-2', 'playlist-1', 6, NOW() - INTERVAL '10 minutes'),  -- A Tribe Called Quest dans Session Live Stream
-    ('pt-3', 'playlist-2', 2, NOW() - INTERVAL '15 minutes')   -- Kendrick Lamar dans Viewer Favorites
-ON CONFLICT (id) DO NOTHING;
+-- ===== RÉSUMÉ DES CHANGEMENTS =====
+-- 🗑️ SUPPRIMÉ : Toutes les colonnes Spotify de la table users
+-- 🔄 ARCHITECTURE : Spotify utilise maintenant le stockage en mémoire comme Twitch
+-- ✅ CONSERVÉ : Structure de base pour sessions, propositions, playlists
+-- 💾 STOCKAGE SPOTIFY : Backend auth.js > spotifyUserTokens (mémoire)
 
--- ===== SUPPRESSION DE L'ANCIENNE TABLE =====
--- Supprimer l'ancienne table tracks si elle existe
--- DROP TABLE IF EXISTS tracks; 
+SELECT 'Base de données réinitialisée - Spotify maintenant géré en mémoire comme Twitch' as status; 
