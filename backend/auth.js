@@ -151,25 +151,46 @@ let twitchUserTokens = {}; // Garde seulement pour la modération Twitch
 
 router.get('/spotify', (req, res) => {
   console.log('🎵 Starting Spotify authentication...');
+  console.log('🔍 Query params:', req.query);
+  console.log('🔍 Headers:', req.headers);
   
-  // Vérifier que l'utilisateur est connecté via Twitch (JWT)
-  const authHeader = req.headers.authorization;
+  // Récupérer le token Twitch depuis les headers ou query params
   let currentUserId = null;
+  let twitchToken = null;
   
+  // Essayer d'abord les headers (pour les appels API)
+  const authHeader = req.headers.authorization;
   if (authHeader) {
     try {
-      const token = authHeader.split(' ')[1];
-      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      twitchToken = authHeader.split(' ')[1];
+      const payload = jwt.verify(twitchToken, process.env.JWT_SECRET);
       currentUserId = payload.id;
-      console.log('✅ Utilisateur Twitch identifié:', currentUserId, payload.display_name);
+      console.log('✅ Utilisateur Twitch identifié via headers:', currentUserId, payload.display_name);
     } catch (error) {
-      console.log('⚠️ Token JWT invalide ou manquant, connexion Spotify anonyme');
+      console.log('⚠️ Token JWT invalide dans headers:', error.message);
     }
+  }
+  
+  // Si pas de token dans headers, essayer query params (pour les redirections)
+  if (!currentUserId && req.query.token) {
+    try {
+      twitchToken = req.query.token;
+      const payload = jwt.verify(twitchToken, process.env.JWT_SECRET);
+      currentUserId = payload.id;
+      console.log('✅ Utilisateur Twitch identifié via query params:', currentUserId, payload.display_name);
+    } catch (error) {
+      console.log('⚠️ Token JWT invalide dans query params:', error.message);
+    }
+  }
+  
+  if (!currentUserId) {
+    console.log('⚠️ Aucun token Twitch valide trouvé, connexion Spotify sans liaison');
   }
   
   // Stocker l'ID utilisateur dans un state JWT pour le callback
   const state = jwt.sign({ 
     userId: currentUserId,
+    twitchToken: twitchToken, // Stocker aussi le token pour le callback
     timestamp: Date.now() 
   }, process.env.JWT_SECRET, { expiresIn: '10m' });
   
@@ -184,7 +205,8 @@ router.get('/spotify', (req, res) => {
   // Vérification des variables d'environnement
   if (!clientId || !redirectUri) {
     console.error('Missing Spotify configuration:', { clientId, redirectUri });
-    return res.status(500).json({ error: 'Configuration Spotify manquante' });
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent('Configuration Spotify manquante')}`);
   }
 
   const url = new URL('https://accounts.spotify.com/authorize');

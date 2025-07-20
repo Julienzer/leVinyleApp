@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import HomePage from './components/HomePage'
 import SessionRoom from './components/SessionRoom'
-import SpotifyLoginButton from './components/SpotifyLoginButton'
 import TestControls from './components/TestControls'
 import Avatar from './components/Avatar'
 import DebugPanel from './components/DebugPanel'
@@ -21,6 +20,10 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [notification, setNotification] = useState(null)
   const [spotifyRefreshKey, setSpotifyRefreshKey] = useState(0)
+  
+  // Nouvel état pour Spotify (similaire à Twitch)
+  const [spotifyUser, setSpotifyUser] = useState(null)
+  const [spotifyConnected, setSpotifyConnected] = useState(false)
 
   useEffect(() => {
     if (isTestMode) {
@@ -74,6 +77,22 @@ function App() {
           type: 'success',
           message: `Spotify connecté avec succès !${spotifyUser ? ` (${decodeURIComponent(spotifyUser)})` : ''}`
         })
+        
+        // Stocker les infos Spotify comme pour Twitch
+        if (spotifyUser) {
+          const spotifyUserData = {
+            display_name: decodeURIComponent(spotifyUser),
+            connected: true
+          }
+          setSpotifyUser(spotifyUserData)
+          setSpotifyConnected(true)
+          localStorage.setItem('spotifyUser', JSON.stringify(spotifyUserData))
+          localStorage.setItem('spotifyConnected', 'true')
+        } else {
+          setSpotifyConnected(true)
+          localStorage.setItem('spotifyConnected', 'true')
+        }
+        
         // Déclencher un rafraîchissement du bouton Spotify
         setSpotifyRefreshKey(prev => prev + 1)
       } else if (spotifyError) {
@@ -81,6 +100,29 @@ function App() {
           type: 'error',
           message: `Erreur Spotify : ${decodeURIComponent(spotifyError)}`
         })
+        
+        // Nettoyer l'état Spotify en cas d'erreur
+        setSpotifyUser(null)
+        setSpotifyConnected(false)
+        localStorage.removeItem('spotifyUser')
+        localStorage.removeItem('spotifyConnected')
+      } else {
+        // Récupérer l'état Spotify depuis localStorage au démarrage
+        const storedSpotifyUser = localStorage.getItem('spotifyUser')
+        const storedSpotifyConnected = localStorage.getItem('spotifyConnected')
+        
+        if (storedSpotifyConnected === 'true') {
+          setSpotifyConnected(true)
+          if (storedSpotifyUser) {
+            try {
+              const spotifyUserData = JSON.parse(storedSpotifyUser)
+              setSpotifyUser(spotifyUserData)
+            } catch (e) {
+              console.error('Error parsing stored Spotify user:', e)
+              localStorage.removeItem('spotifyUser')
+            }
+          }
+        }
       }
 
       // Nettoyer l'URL
@@ -117,12 +159,56 @@ function App() {
     if (!isTestMode) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+      // Nettoyer aussi les données Spotify lors de la déconnexion Twitch
+      localStorage.removeItem('spotifyUser')
+      localStorage.removeItem('spotifyConnected')
     }
     setToken(null)
     setUser(null)
+    setSpotifyUser(null)
+    setSpotifyConnected(false)
     setNotification({
       type: 'success',
       message: 'Déconnecté avec succès'
+    })
+  }
+
+  const handleSpotifyLogin = () => {
+    if (isTestMode) {
+      // En mode test, simuler la connexion Spotify
+      const mockSpotifyUser = { display_name: 'TestSpotifyUser', connected: true }
+      setSpotifyUser(mockSpotifyUser)
+      setSpotifyConnected(true)
+      setNotification({
+        type: 'success',
+        message: 'Spotify connecté avec succès (mode test)'
+      })
+    } else {
+      // Vérifier qu'on a un token Twitch
+      if (!token) {
+        setNotification({
+          type: 'error',
+          message: 'Vous devez être connecté à Twitch pour connecter Spotify'
+        })
+        return
+      }
+      
+      // Rediriger vers l'authentification Spotify en passant le token via query parameter
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+      window.location.href = `${apiUrl}/api/auth/spotify?token=${encodeURIComponent(token)}`
+    }
+  }
+
+  const handleSpotifyLogout = () => {
+    if (!isTestMode) {
+      localStorage.removeItem('spotifyUser')
+      localStorage.removeItem('spotifyConnected')
+    }
+    setSpotifyUser(null)
+    setSpotifyConnected(false)
+    setNotification({
+      type: 'success',
+      message: 'Déconnecté de Spotify avec succès'
     })
   }
 
@@ -227,12 +313,71 @@ function App() {
               </button>
               
               {/* Bouton Spotify - Uniquement visible quand connecté à Twitch */}
-              {!isTestMode && (
-                <SpotifyLoginButton 
-                  key={spotifyRefreshKey} 
-                  token={token}
-                  user={user}
-                />
+              {!isTestMode && token && (
+                spotifyConnected && spotifyUser ? (
+                  <button
+                    onClick={handleSpotifyLogout}
+                    className="flex items-center gap-2 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 px-3 py-2 rounded-full transition-all group"
+                    title="Se déconnecter de Spotify"
+                  >
+                    <div className="w-8 h-8 bg-[#1DB954] rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-medium group-hover:text-gray-200">
+                      {spotifyUser.display_name}
+                    </span>
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-red-400 transition-colors opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSpotifyLogin}
+                    className="px-6 py-3 rounded-full font-bold text-base bg-[#1DB954] text-white hover:bg-[#1DB954]/80 transition-all shadow-lg flex items-center gap-2"
+                    title={`Connecter Spotify pour ${user.display_name}`}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Connecter Spotify
+                  </button>
+                )
+              )}
+              
+              {/* Mode test - Afficher les boutons Spotify aussi */}
+              {isTestMode && token && (
+                spotifyConnected && spotifyUser ? (
+                  <button
+                    onClick={handleSpotifyLogout}
+                    className="flex items-center gap-2 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 px-3 py-2 rounded-full transition-all group"
+                    title="Se déconnecter de Spotify (mode test)"
+                  >
+                    <div className="w-8 h-8 bg-[#1DB954] rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-medium group-hover:text-gray-200">
+                      {spotifyUser.display_name}
+                    </span>
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-red-400 transition-colors opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSpotifyLogin}
+                    className="px-6 py-3 rounded-full font-bold text-base bg-[#1DB954] text-white hover:bg-[#1DB954]/80 transition-all shadow-lg flex items-center gap-2"
+                    title="Connecter Spotify (mode test)"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Connecter Spotify
+                  </button>
+                )
               )}
             </div>
           )}
