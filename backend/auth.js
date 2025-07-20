@@ -143,12 +143,36 @@ router.get('/twitch/callback', async (req, res) => {
   }
 });
 
-// --- Tokens utilisateurs ---
-let spotifyUserTokens = {};
-let twitchUserTokens = {};
+// --- Variables globales supprimées : plus de tokens partagés ! ---
+// Les tokens Spotify sont maintenant stockés en base de données par utilisateur
+// Les tokens Twitch sont utilisés uniquement pour les JWT
+
+let twitchUserTokens = {}; // Garde seulement pour la modération Twitch
 
 router.get('/spotify', (req, res) => {
-  console.log('Starting Spotify authentication...');
+  console.log('🎵 Starting Spotify authentication...');
+  
+  // Vérifier que l'utilisateur est connecté via Twitch (JWT)
+  const authHeader = req.headers.authorization;
+  let currentUserId = null;
+  
+  if (authHeader) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      currentUserId = payload.id;
+      console.log('✅ Utilisateur Twitch identifié:', currentUserId, payload.display_name);
+    } catch (error) {
+      console.log('⚠️ Token JWT invalide ou manquant, connexion Spotify anonyme');
+    }
+  }
+  
+  // Stocker l'ID utilisateur dans un state JWT pour le callback
+  const state = jwt.sign({ 
+    userId: currentUserId,
+    timestamp: Date.now() 
+  }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  
   const scopes = [
     'playlist-modify-public',
     'playlist-modify-private',
@@ -168,28 +192,40 @@ router.get('/spotify', (req, res) => {
   url.searchParams.append('client_id', clientId);
   url.searchParams.append('scope', scopes.join(' '));
   url.searchParams.append('redirect_uri', redirectUri);
+  url.searchParams.append('state', state);
   url.searchParams.append('show_dialog', 'true'); // Force la page de connexion
 
-  console.log('Redirecting to Spotify auth URL:', url.toString());
+  console.log('🔄 Redirecting to Spotify auth URL:', url.toString());
   res.redirect(url.toString());
 });
 
 router.get('/spotify/callback', async (req, res) => {
-  console.log('Received Spotify callback');
-  console.log('Query params:', req.query);
+  console.log('🔄 Received Spotify callback');
+  console.log('📥 Query params:', req.query);
 
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   
   if (error) {
-    console.error('Spotify auth error:', error);
-    // Rediriger vers le frontend avec un paramètre d'erreur
+    console.error('❌ Spotify auth error:', error);
     return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(error)}`);
   }
 
   if (!code) {
-    console.error('No code received from Spotify');
+    console.error('❌ No code received from Spotify');
     return res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent('Code d\'autorisation manquant')}`);
+  }
+
+  // Décoder le state pour récupérer l'utilisateur Twitch
+  let twitchUserId = null;
+  if (state) {
+    try {
+      const decoded = jwt.verify(state, process.env.JWT_SECRET);
+      twitchUserId = decoded.userId;
+      console.log('✅ Utilisateur Twitch identifié via state:', twitchUserId);
+    } catch (error) {
+      console.log('⚠️ State JWT invalide, connexion Spotify sans lien Twitch');
+    }
   }
 
   const api = new spotifyApi({
@@ -199,56 +235,125 @@ router.get('/spotify/callback', async (req, res) => {
   });
 
   try {
-    console.log('Exchanging code for tokens...');
+    console.log('🔄 Exchanging code for tokens...');
     const data = await api.authorizationCodeGrant(code);
     const access_token = data.body['access_token'];
     const refresh_token = data.body['refresh_token'];
+    const expires_in = data.body['expires_in'];
     
-    console.log('Tokens received, getting user info...');
+    console.log('🔑 Tokens received, getting user info...');
     api.setAccessToken(access_token);
     const me = await api.getMe();
     
-    // Stocke le token utilisateur en mémoire (clé = id Spotify)
-    spotifyUserTokens[me.body.id] = { 
-      access_token, 
-      refresh_token,
+    const spotifyData = {
+      spotify_id: me.body.id,
+      spotify_access_token: access_token,
+      spotify_refresh_token: refresh_token,
+      expires_in: expires_in,
       display_name: me.body.display_name,
       profile_picture: me.body.images && me.body.images.length > 0 ? me.body.images[0].url : null
     };
-    console.log('Spotify user authenticated:', {
-      id: me.body.id,
-      display_name: me.body.display_name,
-      profile_picture: me.body.images && me.body.images.length > 0 ? me.body.images[0].url : null,
-      tokens: spotifyUserTokens[me.body.id]
-    });
 
-    // Rediriger vers le frontend avec un paramètre de succès
-    res.redirect(`${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}`);
+    // Si l'utilisateur est connecté via Twitch, lier les tokens Spotify à son compte
+    if (twitchUserId) {
+      try {
+        await User.updateSpotifyTokens(twitchUserId, spotifyData);
+        console.log('✅ Tokens Spotify liés au compte Twitch:', twitchUserId);
+        
+        // Rediriger avec succès et nom d'utilisateur
+        return res.redirect(`${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=true`);
+      } catch (dbError) {
+        console.error('❌ Erreur lors de la liaison avec le compte Twitch:', dbError);
+        // Continuer sans lier - l'utilisateur pourra réessayer
+      }
+    }
+
+    // Si pas de compte Twitch ou erreur de liaison, succès simple
+    console.log('✅ Spotify user authenticated (non lié à Twitch):', me.body.display_name);
+    res.redirect(`${frontendUrl}/?spotify_success=true&spotify_user=${encodeURIComponent(me.body.display_name)}&linked_to_twitch=false`);
+    
   } catch (err) {
-    console.error('Erreur OAuth Spotify:', err);
-    // Rediriger vers le frontend avec un paramètre d'erreur
-    res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(err.message)}`);
+    console.error('❌ Erreur OAuth Spotify:', err);
+    
+    // Gestion intelligente du message d'erreur
+    let errorMessage = 'Erreur d\'authentification Spotify';
+    
+    if (typeof err === 'string') {
+      errorMessage = err;
+    } else if (err && err.message) {
+      errorMessage = err.message;
+    } else if (err && err.body && err.body.error_description) {
+      errorMessage = err.body.error_description;
+    } else if (err && err.statusCode) {
+      errorMessage = `Erreur Spotify ${err.statusCode}`;
+    }
+    
+    console.log('📝 Message d\'erreur formaté:', errorMessage);
+    res.redirect(`${frontendUrl}/?spotify_error=${encodeURIComponent(errorMessage)}`);
   }
 });
 
 // Route pour vérifier le statut de l'authentification Spotify
-router.get('/spotify/status', (req, res) => {
-  const spotifyUserCount = Object.keys(spotifyUserTokens).length;
-  const spotifyUsers = Object.keys(spotifyUserTokens).map(id => ({
-    id,
-    display_name: spotifyUserTokens[id].display_name,
-    profile_picture: spotifyUserTokens[id].profile_picture,
-    hasToken: !!spotifyUserTokens[id]
-  }));
-  
-  res.json({
-    success: true,
-    authenticated: spotifyUserCount > 0,
-    userCount: spotifyUserCount,
-    users: spotifyUsers,
-    // Retourner le premier utilisateur comme utilisateur principal
-    currentUser: spotifyUsers.length > 0 ? spotifyUsers[0] : null
-  });
+router.get('/spotify/status', async (req, res) => {
+  try {
+    // Récupérer l'utilisateur depuis le JWT
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.json({
+        success: true,
+        authenticated: false,
+        currentUser: null,
+        message: 'Aucun token d\'authentification fourni'
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = payload.id;
+
+    console.log('🔍 Vérification statut Spotify pour utilisateur:', userId);
+
+    // Récupérer les tokens Spotify de cet utilisateur depuis la DB
+    const spotifyTokens = await User.getSpotifyTokens(userId);
+    
+    if (!spotifyTokens) {
+      console.log('❌ Aucun token Spotify trouvé pour cet utilisateur');
+      return res.json({
+        success: true,
+        authenticated: false,
+        currentUser: null,
+        message: 'Utilisateur non connecté à Spotify'
+      });
+    }
+
+    console.log('✅ Tokens Spotify trouvés:', {
+      display_name: spotifyTokens.display_name,
+      expired: spotifyTokens.is_expired
+    });
+
+    res.json({
+      success: true,
+      authenticated: !spotifyTokens.is_expired,
+      currentUser: {
+        id: spotifyTokens.spotify_id,
+        display_name: spotifyTokens.display_name,
+        profile_picture: spotifyTokens.profile_picture,
+        hasToken: true,
+        is_expired: spotifyTokens.is_expired
+      },
+      userCount: 1, // Toujours 1 car c'est lié à l'utilisateur actuel
+      linked_to_twitch: true
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur lors de la vérification du statut Spotify:', error);
+    res.json({
+      success: true,
+      authenticated: false,
+      currentUser: null,
+      error: 'Erreur lors de la vérification'
+    });
+  }
 });
 
 // Route pour déconnexion générale
@@ -263,23 +368,34 @@ router.post('/logout', (req, res) => {
 });
 
 // Route pour déconnexion Spotify uniquement
-router.post('/spotify/logout', (req, res) => {
+router.post('/spotify/logout', async (req, res) => {
   try {
-    console.log('Déconnexion Spotify - Tokens avant:', Object.keys(spotifyUserTokens));
-    
-    // Vider tous les tokens Spotify
-    for (const userId in spotifyUserTokens) {
-      delete spotifyUserTokens[userId];
+    // Récupérer l'utilisateur depuis le JWT
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token d\'authentification requis'
+      });
     }
+
+    const token = authHeader.split(' ')[1];
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = payload.id;
+
+    console.log('🔄 Déconnexion Spotify pour utilisateur:', userId);
+
+    // Supprimer les tokens Spotify de cet utilisateur
+    await User.clearSpotifyTokens(userId);
     
-    console.log('Déconnexion Spotify - Tokens après:', Object.keys(spotifyUserTokens));
+    console.log('✅ Tokens Spotify supprimés pour:', userId);
     res.json({ 
       success: true, 
       message: 'Déconnecté de Spotify avec succès',
       authenticated: false 
     });
   } catch (error) {
-    console.error('Error logging out from Spotify:', error);
+    console.error('❌ Erreur lors de la déconnexion Spotify:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Erreur lors de la déconnexion Spotify' 
@@ -366,21 +482,62 @@ async function checkTwitchModeratorStatus(userId, streamerId) {
   }
 }
 
-// Endpoint de debug pour voir les tokens stockés
-router.get('/debug/tokens', (req, res) => {
-  res.json({
-    success: true,
-    twitchTokens: Object.keys(twitchUserTokens).map(userId => ({
+// Endpoint de debug pour voir les tokens stockés (mise à jour pour multi-users)
+router.get('/debug/tokens', async (req, res) => {
+  try {
+    // Récupérer l'utilisateur depuis le JWT si disponible
+    let currentUser = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const payload = jwt.verify(token, process.env.JWT_SECRET);
+        currentUser = payload;
+      } catch (error) {
+        // Token invalide, ignorer
+      }
+    }
+
+    // Statistiques générales des tokens Twitch
+    const twitchTokensCount = Object.keys(twitchUserTokens).length;
+    const twitchUsers = Object.keys(twitchUserTokens).map(userId => ({
       userId,
       display_name: twitchUserTokens[userId].display_name,
       hasToken: !!twitchUserTokens[userId].access_token
-    })),
-    spotifyTokens: Object.keys(spotifyUserTokens).map(userId => ({
-      userId,
-      display_name: spotifyUserTokens[userId].display_name,
-      hasToken: !!spotifyUserTokens[userId].access_token
-    }))
-  });
+    }));
+
+    // Statistiques des tokens Spotify (depuis la DB)
+    let spotifyStats = null;
+    if (currentUser) {
+      const spotifyTokens = await User.getSpotifyTokens(currentUser.id);
+      spotifyStats = {
+        connected: !!spotifyTokens,
+        expired: spotifyTokens?.is_expired || false,
+        display_name: spotifyTokens?.display_name || null
+      };
+    }
+
+    res.json({
+      success: true,
+      currentUser: currentUser ? {
+        id: currentUser.id,
+        display_name: currentUser.display_name,
+        spotify: spotifyStats
+      } : null,
+      stats: {
+        twitchTokens: twitchTokensCount,
+        architecture: 'multi-users',
+        spotify_storage: 'database'
+      },
+      twitchUsers: twitchUsers
+    });
+  } catch (error) {
+    console.error('❌ Erreur debug tokens:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la récupération des informations de debug'
+    });
+  }
 });
 
 // Endpoint de debug pour tester la modération

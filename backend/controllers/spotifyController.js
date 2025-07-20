@@ -1,44 +1,39 @@
 const spotifyApi = require('spotify-web-api-node');
-const { spotifyUserTokens } = require('../auth');
+const User = require('../models/User');
 
 // Récupérer les playlists Spotify de l'utilisateur
 const getSpotifyPlaylists = async (req, res) => {
   try {
     console.log('🎵 Récupération des playlists Spotify...');
-    console.log('🔑 Tokens Spotify disponibles:', Object.keys(spotifyUserTokens));
     
-    // Trouver le token Spotify de l'utilisateur
-    let spotifyToken = null;
-    let spotifyUserId = null;
+    // Récupérer l'utilisateur depuis le JWT
+    const userId = req.user.id; // Vient du middleware requireAuth
+    console.log('👤 Utilisateur Twitch:', userId);
     
-    for (const [userId, tokenData] of Object.entries(spotifyUserTokens)) {
-      if (tokenData.access_token) {
-        spotifyToken = tokenData.access_token;
-        spotifyUserId = userId;
-        console.log('✅ Token Spotify trouvé pour:', tokenData.display_name);
-        break;
-      }
-    }
+    // Récupérer les tokens Spotify de cet utilisateur
+    const spotifyTokens = await User.getSpotifyTokens(userId);
     
-    if (!spotifyToken) {
+    if (!spotifyTokens || spotifyTokens.is_expired) {
       return res.status(401).json({
         success: false,
-        error: 'Aucune connexion Spotify trouvée. Veuillez vous connecter à Spotify.'
+        error: 'Connexion Spotify requise ou expirée. Veuillez vous reconnecter.'
       });
     }
     
-    // Configurer l'API Spotify
+    console.log('✅ Tokens Spotify trouvés pour:', spotifyTokens.display_name);
+    
+    // Configurer l'API Spotify avec les tokens de l'utilisateur
     const api = new spotifyApi({
       clientId: process.env.SPOTIFY_CLIENT_ID,
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
       redirectUri: process.env.SPOTIFY_REDIRECT_URI
     });
     
-    api.setAccessToken(spotifyToken);
+    api.setAccessToken(spotifyTokens.access_token);
     
     // Récupérer les playlists de l'utilisateur
     console.log('📋 Récupération des playlists via API Spotify...');
-    const playlistsResponse = await api.getUserPlaylists(spotifyUserId, {
+    const playlistsResponse = await api.getUserPlaylists(spotifyTokens.spotify_id, {
       limit: 50,
       offset: 0
     });
@@ -66,8 +61,8 @@ const getSpotifyPlaylists = async (req, res) => {
       success: true,
       playlists: playlists,
       user: {
-        id: spotifyUserId,
-        display_name: spotifyUserTokens[spotifyUserId].display_name
+        id: spotifyTokens.spotify_id,
+        display_name: spotifyTokens.display_name
       }
     });
     
@@ -96,22 +91,16 @@ const addTrackToSpotifyPlaylist = async (req, res) => {
     
     console.log('🎵 Ajout du morceau à la playlist Spotify:', { playlistId, trackId, spotify_url });
     
-    // Trouver le token Spotify de l'utilisateur
-    let spotifyToken = null;
-    let spotifyUserId = null;
+    // Récupérer l'utilisateur depuis le JWT
+    const userId = req.user.id; // Vient du middleware requireAuth
     
-    for (const [userId, tokenData] of Object.entries(spotifyUserTokens)) {
-      if (tokenData.access_token) {
-        spotifyToken = tokenData.access_token;
-        spotifyUserId = userId;
-        break;
-      }
-    }
+    // Récupérer les tokens Spotify de cet utilisateur
+    const spotifyTokens = await User.getSpotifyTokens(userId);
     
-    if (!spotifyToken) {
+    if (!spotifyTokens || spotifyTokens.is_expired) {
       return res.status(401).json({
         success: false,
-        error: 'Aucune connexion Spotify trouvée'
+        error: 'Connexion Spotify requise ou expirée'
       });
     }
     
@@ -124,14 +113,14 @@ const addTrackToSpotifyPlaylist = async (req, res) => {
       });
     }
     
-    // Configurer l'API Spotify
+    // Configurer l'API Spotify avec les tokens de l'utilisateur
     const api = new spotifyApi({
       clientId: process.env.SPOTIFY_CLIENT_ID,
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
       redirectUri: process.env.SPOTIFY_REDIRECT_URI
     });
     
-    api.setAccessToken(spotifyToken);
+    api.setAccessToken(spotifyTokens.access_token);
     
     // Ajouter le morceau à la playlist
     console.log('➕ Ajout du morceau:', spotifyTrackId, 'à la playlist:', playlistId);
@@ -206,19 +195,16 @@ const getSpotifyPlaylistDetails = async (req, res) => {
     
     console.log('🎵 Récupération des détails de la playlist:', playlistId);
     
-    // Trouver le token Spotify
-    let spotifyToken = null;
-    for (const tokenData of Object.values(spotifyUserTokens)) {
-      if (tokenData.access_token) {
-        spotifyToken = tokenData.access_token;
-        break;
-      }
-    }
+    // Récupérer l'utilisateur depuis le JWT
+    const userId = req.user.id; // Vient du middleware requireAuth
     
-    if (!spotifyToken) {
+    // Récupérer les tokens Spotify de cet utilisateur
+    const spotifyTokens = await User.getSpotifyTokens(userId);
+    
+    if (!spotifyTokens || spotifyTokens.is_expired) {
       return res.status(401).json({
         success: false,
-        error: 'Aucune connexion Spotify trouvée'
+        error: 'Connexion Spotify requise ou expirée'
       });
     }
     
@@ -228,7 +214,7 @@ const getSpotifyPlaylistDetails = async (req, res) => {
       redirectUri: process.env.SPOTIFY_REDIRECT_URI
     });
     
-    api.setAccessToken(spotifyToken);
+    api.setAccessToken(spotifyTokens.access_token);
     
     // Récupérer les détails de la playlist
     const playlistResponse = await api.getPlaylist(playlistId);

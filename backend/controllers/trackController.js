@@ -67,9 +67,10 @@ class TrackController {
       const updatedTrack = await Track.updateStatus(id, status);
 
       // If track is approved, add it to Spotify playlist
-      if (status === 'approved') {
+      if (status === 'approved' && req.user) {
         const trackId = track.spotify_url.split('/').pop().split('?')[0];
-        await SpotifyService.addToPlaylist(trackId, process.env.SPOTIFY_PLAYLIST_ID);
+        // Utiliser l'ID de l'utilisateur connecté pour ses tokens Spotify
+        await SpotifyService.addToPlaylist(trackId, process.env.SPOTIFY_PLAYLIST_ID, req.user.id);
       }
 
       res.json(updatedTrack);
@@ -85,9 +86,15 @@ class TrackController {
       const { id } = req.params;
       const track = await Track.findById(id);
       if (!track) return res.status(404).json({ error: 'Track not found' });
+      
+      // Utiliser l'ID de l'utilisateur connecté (nécessite middleware requireAuth)
+      if (!req.user) {
+        return res.status(401).json({ error: 'Authentification requise' });
+      }
+      
       // Extraire l'ID du morceau Spotify
       const trackId = track.spotify_url.split('/').pop().split('?')[0];
-      await SpotifyService.addToPlaylist(trackId, process.env.SPOTIFY_PLAYLIST_ID);
+      await SpotifyService.addToPlaylist(trackId, process.env.SPOTIFY_PLAYLIST_ID, req.user.id);
       await Track.updateStatus(id, 'approved');
       res.json({ success: true });
     } catch (error) {

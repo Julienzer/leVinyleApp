@@ -73,40 +73,38 @@ class SpotifyService {
   }
 
   // Ajoute un morceau à la playlist Spotify avec le token utilisateur
-  static async addToPlaylist(trackId, playlistId) {
-    console.log('Adding track to playlist:', { trackId, playlistId });
-    console.log('Current Spotify user tokens:', spotifyUserTokens);
+  static async addToPlaylist(trackId, playlistId, userId) {
+    console.log('🎵 Adding track to playlist:', { trackId, playlistId, userId });
 
-    if (!spotifyUserTokens || Object.keys(spotifyUserTokens).length === 0) {
-      console.error('No Spotify user tokens available');
-      throw new Error('Aucun token utilisateur Spotify disponible. Veuillez vous authentifier via /api/auth/spotify en tant que streamer.');
-    }
-
-    const userIds = Object.keys(spotifyUserTokens);
-    console.log('Available user IDs:', userIds);
+    // Récupérer les tokens Spotify de l'utilisateur
+    const spotifyTokens = await User.getSpotifyTokens(userId);
     
-    const userId = userIds[0]; // Prend le premier utilisateur authentifié
-    const { access_token, refresh_token } = spotifyUserTokens[userId];
-
-    if (!access_token || !refresh_token) {
-      console.error('Invalid Spotify tokens for user:', userId);
-      throw new Error('Token Spotify invalide. Veuillez vous réauthentifier via /api/auth/spotify.');
+    if (!spotifyTokens) {
+      console.error('❌ No Spotify tokens found for user:', userId);
+      throw new Error('Aucun token utilisateur Spotify disponible. Veuillez vous authentifier via /api/auth/spotify.');
     }
+
+    if (spotifyTokens.is_expired) {
+      console.error('❌ Spotify tokens expired for user:', userId);
+      throw new Error('Token Spotify expiré. Veuillez vous réauthentifier via /api/auth/spotify.');
+    }
+
+    console.log('✅ Valid Spotify tokens found for:', spotifyTokens.display_name);
 
     const userApi = new SpotifyWebApi({
       clientId: process.env.SPOTIFY_CLIENT_ID,
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-      accessToken: access_token,
-      refreshToken: refresh_token,
+      accessToken: spotifyTokens.access_token,
+      refreshToken: spotifyTokens.refresh_token,
     });
 
     try {
-      console.log('Attempting to add track to playlist...');
+      console.log('🔄 Attempting to add track to playlist...');
       const result = await userApi.addTracksToPlaylist(playlistId, [`spotify:track:${trackId}`]);
-      console.log('Track added successfully:', result);
+      console.log('✅ Track added successfully:', result);
       return true;
     } catch (error) {
-      console.error('Error adding track to playlist:', error);
+      console.error('❌ Error adding track to playlist:', error);
       if (error.statusCode === 401) {
         throw new Error('Session Spotify expirée. Veuillez vous réauthentifier via /api/auth/spotify.');
       }
