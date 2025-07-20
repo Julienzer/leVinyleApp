@@ -38,14 +38,12 @@ function App() {
       
       // Gérer l'authentification Twitch
       if (tokenFromUrl) {
-        console.log('🔐 Token reçu depuis URL:', tokenFromUrl.substring(0, 20) + '...')
         setToken(tokenFromUrl)
         localStorage.setItem('token', tokenFromUrl)
         try {
           const payload = JSON.parse(atob(tokenFromUrl.split('.')[1]))
           setUser(payload)
           localStorage.setItem('user', JSON.stringify(payload))
-          console.log('✅ Utilisateur connecté:', payload.display_name)
         } catch (e) {
           console.error('Error decoding token:', e)
         }
@@ -57,12 +55,10 @@ function App() {
         const storedUser = localStorage.getItem('user')
         
         if (storedToken && storedUser) {
-          console.log('🔐 Token récupéré depuis localStorage')
           setToken(storedToken)
           try {
             const userData = JSON.parse(storedUser)
             setUser(userData)
-            console.log('✅ Utilisateur restauré:', userData.display_name)
           } catch (e) {
             console.error('Error parsing stored user:', e)
             // Nettoyer le localStorage si les données sont corrompues
@@ -118,7 +114,6 @@ function App() {
   }
 
   const handleLogout = () => {
-    console.log('🔐 Déconnexion...')
     if (!isTestMode) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
@@ -150,13 +145,13 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen w-full bg-gradient-to-br from-[#2D0036] via-[#3D1A4B] to-[#2D0036]">
-        {/* Notification Toast */}
+        {/* Notification Toast - En bas à droite */}
         {notification && (
-          <div className="fixed top-4 right-4 z-50 max-w-sm">
-            <div className={`rounded-lg p-4 shadow-lg ${
+          <div className="fixed bottom-6 right-6 z-50 max-w-sm">
+            <div className={`rounded-lg p-4 shadow-lg backdrop-blur-md border transition-all duration-300 transform ${
               notification.type === 'success' 
-                ? 'bg-green-600 text-white' 
-                : 'bg-red-600 text-white'
+                ? 'bg-green-600/90 border-green-500 text-white' 
+                : 'bg-red-600/90 border-red-500 text-white'
             }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
@@ -211,37 +206,28 @@ function App() {
               {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
             </>
           ) : (
-                          <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-[#9146FF]/20 px-3 py-2 rounded-full">
-                  <Avatar 
-                    src={user?.profile_picture} 
-                    alt={user?.display_name}
-                    size="md"
-                  />
-                  <span className="text-white font-medium">
-                    {user?.display_name}
-                    {user?.role === 'moderator' && (
-                      <span className="ml-2 px-2 py-0.5 text-xs bg-[#00FFD0] text-[#2D0036] rounded-full">
-                        Modo
-                      </span>
-                    )}
-                    {user?.isStreamer && (
-                      <span className="ml-2 px-2 py-0.5 text-xs bg-[#FF4FAD] text-white rounded-full">
-                        Streamer
-                      </span>
-                    )}
-                  </span>
-                </div>
-              {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
+            <div className="flex items-center gap-3">
+              {/* Bouton Twitch - Se déconnecter de Twitch */}
               <button
                 onClick={handleLogout}
-                className="p-2 rounded-full bg-red-500/20 hover:bg-red-500/30 transition-all text-red-500"
-                title="Déconnexion"
+                className="flex items-center gap-2 bg-[#9146FF]/20 hover:bg-[#9146FF]/30 px-3 py-2 rounded-full transition-all group"
+                title="Se déconnecter de Twitch"
               >
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                <Avatar 
+                  src={user?.profile_picture} 
+                  alt={user?.display_name}
+                  size="md"
+                />
+                <span className="text-white font-medium group-hover:text-gray-200">
+                  {user?.display_name}
+                </span>
+                <svg className="w-4 h-4 text-gray-400 group-hover:text-red-400 transition-colors opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
               </button>
+              
+              {/* Bouton Spotify - Se déconnecter/connecter à Spotify */}
+              {!isTestMode && <SpotifyLoginButton key={spotifyRefreshKey} />}
             </div>
           )}
         </div>

@@ -3,29 +3,59 @@ const Session = require('../models/Session');
 const { checkTwitchModeratorStatus } = require('../auth');
 
 class UserController {
+  // Diagnostic simple de la vérification de modération (pour debug si nécessaire)
+  static async diagnoseModerationStatus(req, res) {
+    try {
+      const { streamerId } = req.params;
+      const userId = req.user.id;
+
+      // Vérifier les tokens disponibles
+      const { twitchUserTokens } = require('../auth');
+      const hasStreamerToken = !!twitchUserTokens[streamerId];
+
+      if (!hasStreamerToken) {
+        return res.json({
+          success: false,
+          error: 'STREAMER_TOKEN_MISSING',
+          message: 'Le streamer doit se connecter à l\'application'
+        });
+      }
+
+      // Vérifier le statut de modérateur
+      const isModerator = await checkTwitchModeratorStatus(userId, streamerId);
+      
+      res.json({
+        success: true,
+        isModerator,
+        result: isModerator ? 'MODERATOR_CONFIRMED' : 'NOT_MODERATOR'
+      });
+        
+    } catch (error) {
+      res.status(500).json({ 
+        error: 'Erreur lors du diagnostic',
+        details: error.message 
+      });
+    }
+  }
+
   // Vérifier si un utilisateur est modérateur d'un streamer via l'API Twitch
   static async checkModeratorStatus(req, res) {
     try {
       const { streamerId } = req.params;
       const userId = req.user.id;
 
-      console.log('🔍 Vérification du statut de modérateur Twitch...');
-      console.log('   - Utilisateur connecté:', userId, '(' + req.user.display_name + ')');
-      console.log('   - Streamer cible:', streamerId);
-
       // Utiliser l'API Twitch pour vérifier le statut de modérateur
       const isModerator = await checkTwitchModeratorStatus(userId, streamerId);
 
       res.json({
         success: true,
-        isModerator,
-        userId,
-        streamerId,
-        method: 'twitch_api'
+        isModerator
       });
     } catch (error) {
       console.error('Error checking moderator status:', error);
-      res.status(500).json({ error: 'Erreur lors de la vérification du statut de modérateur' });
+      res.status(500).json({ 
+        error: 'Erreur lors de la vérification du statut de modérateur'
+      });
     }
   }
 

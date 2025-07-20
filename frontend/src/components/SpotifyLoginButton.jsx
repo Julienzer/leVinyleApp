@@ -27,6 +27,20 @@ export default function SpotifyLoginButton() {
     window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/spotify`;
   };
 
+  const handleSpotifyLogout = async () => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/auth/spotify/logout`, {
+        method: 'POST'
+      });
+      // Rafraîchir le statut après déconnexion
+      checkSpotifyStatus();
+    } catch (error) {
+      console.error('Error logging out of Spotify:', error);
+      // Même en cas d'erreur, on peut essayer de rafraîchir le statut
+      checkSpotifyStatus();
+    }
+  };
+
   if (spotifyStatus.loading) {
     return (
       <button
@@ -42,15 +56,19 @@ export default function SpotifyLoginButton() {
   if (spotifyStatus.authenticated && spotifyStatus.currentUser) {
     return (
       <button
-        onClick={checkSpotifyStatus}
-        className="px-6 py-3 rounded-full font-bold text-base bg-[#1DB954] text-white hover:bg-[#1DB954]/80 transition-all shadow-lg flex items-center gap-2"
+        onClick={handleSpotifyLogout}
+        className="px-6 py-3 rounded-full font-bold text-base bg-[#1DB954] hover:bg-[#1DB954]/80 text-white transition-all shadow-lg flex items-center gap-2 group"
+        title="Se déconnecter de Spotify"
       >
         <Avatar 
           src={spotifyStatus.currentUser.profile_picture} 
           alt={spotifyStatus.currentUser.display_name}
           size="sm"
         />
-        <span className="truncate max-w-[120px]">{spotifyStatus.currentUser.display_name}</span>
+        <span className="truncate max-w-[120px] group-hover:text-gray-200">{spotifyStatus.currentUser.display_name}</span>
+        <svg className="w-4 h-4 text-green-200 group-hover:text-red-300 transition-colors opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
       </button>
     );
   }

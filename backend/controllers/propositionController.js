@@ -125,10 +125,25 @@ class PropositionController {
       }
 
       const isStreamer = session.streamer_id === req.user.id;
-      const isModerator = await User.isModeratorOf(req.user.id, session.streamer_id);
+      let isModerator = false;
+      
+      // Vérifier si l'utilisateur est modérateur via l'API Twitch
+      if (!isStreamer) {
+        try {
+          isModerator = await checkTwitchModeratorStatus(req.user.id, session.streamer_id);
+          console.log('🔍 Vérification modérateur pour propositions approuvées:', {
+            userId: req.user.id,
+            streamerId: session.streamer_id,
+            isModerator
+          });
+        } catch (error) {
+          console.error('Erreur lors de la vérification du statut de modérateur:', error);
+          isModerator = false;
+        }
+      }
 
       if (!isStreamer && !isModerator) {
-        return res.status(403).json({ error: 'Accès refusé' });
+        return res.status(403).json({ error: 'Accès refusé - Vous devez être le streamer ou un modérateur' });
       }
 
       const propositions = await Proposition.findApproved(sessionId);
@@ -155,10 +170,25 @@ class PropositionController {
       }
 
       const isStreamer = session.streamer_id === req.user.id;
-      const isModerator = await User.isModeratorOf(req.user.id, session.streamer_id);
+      let isModerator = false;
+      
+      // Vérifier si l'utilisateur est modérateur via l'API Twitch
+      if (!isStreamer) {
+        try {
+          isModerator = await checkTwitchModeratorStatus(req.user.id, session.streamer_id);
+          console.log('🔍 Vérification modérateur pour historique:', {
+            userId: req.user.id,
+            streamerId: session.streamer_id,
+            isModerator
+          });
+        } catch (error) {
+          console.error('Erreur lors de la vérification du statut de modérateur:', error);
+          isModerator = false;
+        }
+      }
 
       if (!isStreamer && !isModerator) {
-        return res.status(403).json({ error: 'Accès refusé' });
+        return res.status(403).json({ error: 'Accès refusé - Vous devez être le streamer ou un modérateur' });
       }
 
       const propositions = await Proposition.findHistory(sessionId);
@@ -210,10 +240,25 @@ class PropositionController {
       }
 
       const isStreamer = session.streamer_id === req.user.id;
-      const isModerator = await User.isModeratorOf(req.user.id, session.streamer_id);
+      let isModerator = false;
+      
+      // Vérifier si l'utilisateur est modérateur via l'API Twitch
+      if (!isStreamer) {
+        try {
+          isModerator = await checkTwitchModeratorStatus(req.user.id, session.streamer_id);
+          console.log('🔍 Vérification modérateur pour approbation:', {
+            userId: req.user.id,
+            streamerId: session.streamer_id,
+            isModerator
+          });
+        } catch (error) {
+          console.error('Erreur lors de la vérification du statut de modérateur:', error);
+          isModerator = false;
+        }
+      }
 
       if (!isStreamer && !isModerator) {
-        return res.status(403).json({ error: 'Accès refusé' });
+        return res.status(403).json({ error: 'Accès refusé - Vous devez être le streamer ou un modérateur' });
       }
 
       // Vérifier que la proposition existe et est en attente
@@ -259,10 +304,25 @@ class PropositionController {
       }
 
       const isStreamer = session.streamer_id === req.user.id;
-      const isModerator = await User.isModeratorOf(req.user.id, session.streamer_id);
+      let isModerator = false;
+      
+      // Vérifier si l'utilisateur est modérateur via l'API Twitch
+      if (!isStreamer) {
+        try {
+          isModerator = await checkTwitchModeratorStatus(req.user.id, session.streamer_id);
+          console.log('🔍 Vérification modérateur pour rejet:', {
+            userId: req.user.id,
+            streamerId: session.streamer_id,
+            isModerator
+          });
+        } catch (error) {
+          console.error('Erreur lors de la vérification du statut de modérateur:', error);
+          isModerator = false;
+        }
+      }
 
       if (!isStreamer && !isModerator) {
-        return res.status(403).json({ error: 'Accès refusé' });
+        return res.status(403).json({ error: 'Accès refusé - Vous devez être le streamer ou un modérateur' });
       }
 
       // Vérifier que la proposition existe et est en attente
@@ -304,10 +364,25 @@ class PropositionController {
       }
 
       const isStreamer = session.streamer_id === req.user.id;
-      const isModerator = await User.isModeratorOf(req.user.id, session.streamer_id);
+      let isModerator = false;
+      
+      // Vérifier si l'utilisateur est modérateur via l'API Twitch
+      if (!isStreamer) {
+        try {
+          isModerator = await checkTwitchModeratorStatus(req.user.id, session.streamer_id);
+          console.log('🔍 Vérification modérateur pour requeue:', {
+            userId: req.user.id,
+            streamerId: session.streamer_id,
+            isModerator
+          });
+        } catch (error) {
+          console.error('Erreur lors de la vérification du statut de modérateur:', error);
+          isModerator = false;
+        }
+      }
 
       if (!isStreamer && !isModerator) {
-        return res.status(403).json({ error: 'Accès refusé' });
+        return res.status(403).json({ error: 'Accès refusé - Vous devez être le streamer ou un modérateur' });
       }
 
       // Vérifier que la proposition existe et a été traitée

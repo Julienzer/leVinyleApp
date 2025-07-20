@@ -247,7 +247,7 @@ router.get('/spotify/status', (req, res) => {
   });
 });
 
-// Route pour déconnexion
+// Route pour déconnexion générale
 router.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -258,6 +258,31 @@ router.post('/logout', (req, res) => {
   });
 });
 
+// Route pour déconnexion Spotify uniquement
+router.post('/spotify/logout', (req, res) => {
+  try {
+    console.log('Déconnexion Spotify - Tokens avant:', Object.keys(spotifyUserTokens));
+    
+    // Vider tous les tokens Spotify
+    for (const userId in spotifyUserTokens) {
+      delete spotifyUserTokens[userId];
+    }
+    
+    console.log('Déconnexion Spotify - Tokens après:', Object.keys(spotifyUserTokens));
+    res.json({ 
+      success: true, 
+      message: 'Déconnecté de Spotify avec succès',
+      authenticated: false 
+    });
+  } catch (error) {
+    console.error('Error logging out from Spotify:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erreur lors de la déconnexion Spotify' 
+    });
+  }
+});
+
 // Fonction pour vérifier si un utilisateur est modérateur d'un streamer via l'API Twitch
 async function checkTwitchModeratorStatus(userId, streamerId) {
   try {
@@ -265,6 +290,11 @@ async function checkTwitchModeratorStatus(userId, streamerId) {
     const streamerToken = twitchUserTokens[streamerId];
     if (!streamerToken) {
       console.log('❌ Aucun token Twitch trouvé pour le streamer:', streamerId);
+      console.log('🔍 Tokens disponibles:', Object.keys(twitchUserTokens).map(id => ({
+        id,
+        display_name: twitchUserTokens[id]?.display_name
+      })));
+      console.log('⚠️ Le streamer doit se connecter à l\'application pour que les modérateurs soient détectés');
       return false;
     }
 
@@ -295,13 +325,10 @@ async function checkTwitchModeratorStatus(userId, streamerId) {
       data: response.data
     });
 
-    const moderators = response.data.data || [];
-    console.log('📋 Modérateurs trouvés:', moderators.map(mod => `${mod.user_name} (${mod.user_id})`));
-    console.log('📋 Total modérateurs:', moderators.length);
-    
-    const isModerator = moderators.some(mod => mod.user_id === userId);
-    
-    console.log(`${isModerator ? '✅' : '❌'} Résultat: ${userId} ${isModerator ? 'EST' : 'N\'EST PAS'} modérateur de ${streamerId}`);
+    const moderators = response.data.data || [];    
+    const isModerator = moderators.some(mod => 
+      mod.user_id === userId || mod.user_id === String(userId) || String(mod.user_id) === String(userId)
+    );
     
     return isModerator;
   } catch (error) {
@@ -359,6 +386,19 @@ router.get('/debug/moderation/:streamerId/:userId', async (req, res) => {
     
     console.log('🧪 Test de modération demandé:', { streamerId, userId });
     
+    // Vérifier si nous avons le token du streamer
+    const hasStreamerToken = !!twitchUserTokens[streamerId];
+    const availableTokens = Object.keys(twitchUserTokens);
+    
+    console.log('🔍 Debug tokens:', {
+      streamerId,
+      hasStreamerToken,
+      availableTokens: availableTokens.map(id => ({
+        id,
+        display_name: twitchUserTokens[id]?.display_name
+      }))
+    });
+    
     const isModerator = await checkTwitchModeratorStatus(userId, streamerId);
     
     res.json({
@@ -366,6 +406,8 @@ router.get('/debug/moderation/:streamerId/:userId', async (req, res) => {
       isModerator,
       userId,
       streamerId,
+      hasStreamerToken,
+      availableTokens,
       method: 'twitch_api_debug'
     });
   } catch (error) {

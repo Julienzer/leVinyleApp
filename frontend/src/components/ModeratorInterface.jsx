@@ -4,8 +4,6 @@ import { mockApiResponses } from '../utils/fakeData'
 import SpotifyPlayer from './SpotifyFallback'
 
 export default function ModeratorInterface({ session, user, token, isTestMode }) {
-  console.log('🛡️ ModeratorInterface rendered for user:', user?.display_name, 'session:', session?.name)
-  
   const [pendingPropositions, setPendingPropositions] = useState([])
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
@@ -275,14 +273,12 @@ export default function ModeratorInterface({ session, user, token, isTestMode })
         </h2>
         <button
           onClick={async () => {
-            console.log('🔄 Actualisation complète des données modérateur')
             setLoading(true)
             try {
               await Promise.all([
                 fetchPendingPropositions(),
                 fetchHistory()
               ])
-              console.log('✅ Actualisation terminée')
             } catch (error) {
               console.error('❌ Erreur lors de l\'actualisation:', error)
               setError('Erreur lors de l\'actualisation')

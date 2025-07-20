@@ -14,6 +14,9 @@ router.get('/:userId', UserController.getUserInfo);
 // GET /api/users/:streamerId/moderator-status - Vérifier si l'utilisateur connecté est modérateur du streamer
 router.get('/:streamerId/moderator-status', UserController.checkModeratorStatus);
 
+// GET /api/users/:streamerId/diagnostic - Diagnostic de la modération (pour debug si nécessaire)
+// router.get('/:streamerId/diagnostic', UserController.diagnoseModerationStatus);
+
 // GET /api/users/:streamerId/moderators - Obtenir les modérateurs d'un streamer
 router.get('/:streamerId/moderators', UserController.getModerators);
 

@@ -40,8 +40,6 @@ export default function HomePage({ user, token, isTestMode }) {
         navigate(`/room/${response.session.code}`)
       } else {
         // Utiliser les vraies API en mode production
-        console.log('🔐 HomePage - Token:', token);
-        console.log('🔐 HomePage - Authorization header:', `Bearer ${token}`);
         const httpResponse = await fetch('/api/sessions', {
           method: 'POST',
           headers: {
@@ -62,8 +60,6 @@ export default function HomePage({ user, token, isTestMode }) {
         }
 
         const response = await httpResponse.json()
-        console.log('📝 HomePage - Session created:', response)
-        console.log('📝 HomePage - Session code:', response.session?.code)
         navigate(`/room/${response.session.code}`)
       }
     } catch (err) {
@@ -241,33 +237,6 @@ export default function HomePage({ user, token, isTestMode }) {
           {error}
         </div>
       )}
-
-      {/* Informations utilisateur */}
-      <div className="mt-12 text-center">
-        {user ? (
-          <div className="text-white">
-            <p className="text-lg">
-              Connecté en tant que <span className="font-bold text-[#DBFFA8]">{user.display_name}</span>
-            </p>
-            <div className="flex justify-center gap-2 mt-2">
-              {user.isStreamer && (
-                <span className="px-3 py-1 text-xs bg-[#FF4FAD] text-white rounded-full">
-                  Streamer
-                </span>
-              )}
-              {user.role === 'moderator' && (
-                <span className="px-3 py-1 text-xs bg-[#00FFD0] text-[#2D0036] rounded-full">
-                  Modérateur
-                </span>
-              )}
-            </div>
-          </div>
-        ) : (
-          <p className="text-gray-400">
-            Connectez-vous avec Twitch pour créer ou rejoindre des sessions
-          </p>
-        )}
-      </div>
     </div>
   )
 } 
