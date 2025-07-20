@@ -1,0 +1,80 @@
+services:
+  # Backend API Service
+  - type: web
+    name: levinyle-backend
+    env: node
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: levinyle-frontend
+          property: url
+      - key: DATABASE_URL
+        fromDatabase:
+          name: levinyle-db
+          property: connectionString
+      - key: DB_HOST
+        fromDatabase:
+          name: levinyle-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: levinyle-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: levinyle-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: levinyle-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: levinyle-db
+          property: password
+      # Ces variables devront être configurées manuellement dans Render
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TWITCH_CLIENT_ID
+        sync: false
+      - key: TWITCH_CLIENT_SECRET
+        sync: false
+      - key: TWITCH_REDIRECT_URI
+        value: https://levinyle-backend.onrender.com/api/auth/twitch/callback
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: SPOTIFY_REDIRECT_URI
+        value: https://levinyle-backend.onrender.com/api/auth/spotify/callback
+
+  # Frontend Static Site
+  - type: web
+    name: levinyle-frontend
+    env: static
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: levinyle-backend
+          property: url
+
+# Database
+databases:
+  - name: levinyle-db
+    databaseName: le_vinyle
+    user: le_vinyle_user
+    plan: free 

@@ -20,7 +20,11 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',  // Pour le développement
+    'https://localhost:5173'  // Pour le développement HTTPS
+  ].filter(Boolean),
   credentials: true
 }));
 app.use(express.json());
@@ -31,9 +35,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,  // Changé de true à false pour HTTP
+    secure: process.env.NODE_ENV === 'production', // HTTPS uniquement en production
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   }
 }));
 
