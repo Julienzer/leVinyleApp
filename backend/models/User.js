@@ -1,13 +1,13 @@
 const db = require('../db');
 
 class User {
-  constructor(id, display_name, email, role, is_streamer, spotify_id) {
+  constructor(id, display_name, email, role, is_streamer, profile_picture) {
     this.id = id;
     this.display_name = display_name;
     this.email = email;
     this.role = role;
     this.is_streamer = is_streamer;
-    this.spotify_id = spotify_id;
+    this.profile_picture = profile_picture;
   }
 
   // Créer ou mettre à jour un utilisateur
@@ -18,127 +18,27 @@ class User {
       email, 
       role, 
       is_streamer, 
-      spotify_id,
-      profile_picture = null,
-      spotify_profile_picture = null,
-      spotify_display_name = null
+      profile_picture = null
     } = userData;
     
     try {
       const result = await db.query(
-        `INSERT INTO users (id, display_name, email, role, is_streamer, spotify_id, profile_picture, spotify_profile_picture, spotify_display_name) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO users (id, display_name, email, role, is_streamer, profile_picture) 
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (id) DO UPDATE SET
            display_name = EXCLUDED.display_name,
            email = EXCLUDED.email,
            role = EXCLUDED.role,
            is_streamer = EXCLUDED.is_streamer,
-           spotify_id = EXCLUDED.spotify_id,
            profile_picture = EXCLUDED.profile_picture,
-           spotify_profile_picture = EXCLUDED.spotify_profile_picture,
-           spotify_display_name = EXCLUDED.spotify_display_name,
            updated_at = CURRENT_TIMESTAMP
          RETURNING *`,
-        [id, display_name, email, role, is_streamer, spotify_id, profile_picture, spotify_profile_picture, spotify_display_name]
+        [id, display_name, email, role, is_streamer, profile_picture]
       );
       
       return result.rows[0];
     } catch (error) {
       console.error('Error creating/updating user:', error);
-      throw error;
-    }
-  }
-
-  // Stocker les tokens Spotify pour un utilisateur
-  static async updateSpotifyTokens(userId, spotifyData) {
-    const {
-      spotify_id,
-      spotify_access_token,
-      spotify_refresh_token,
-      expires_in,
-      display_name,
-      profile_picture
-    } = spotifyData;
-
-    try {
-      const expiresAt = new Date(Date.now() + (expires_in * 1000));
-      
-      const result = await db.query(
-        `UPDATE users SET
-           spotify_id = $2,
-           spotify_access_token = $3,
-           spotify_refresh_token = $4,
-           spotify_token_expires_at = $5,
-           spotify_display_name = $6,
-           spotify_profile_picture = $7,
-           spotify_connected_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1
-         RETURNING *`,
-        [userId, spotify_id, spotify_access_token, spotify_refresh_token, expiresAt, display_name, profile_picture]
-      );
-      
-      return result.rows[0];
-    } catch (error) {
-      console.error('Error updating Spotify tokens:', error);
-      throw error;
-    }
-  }
-
-  // Récupérer les tokens Spotify d'un utilisateur
-  static async getSpotifyTokens(userId) {
-    try {
-      const result = await db.query(
-        `SELECT spotify_id, spotify_access_token, spotify_refresh_token, 
-                spotify_token_expires_at, spotify_display_name, spotify_profile_picture
-         FROM users 
-         WHERE id = $1 AND spotify_access_token IS NOT NULL`,
-        [userId]
-      );
-      
-      if (result.rows.length === 0) {
-        return null;
-      }
-
-      const user = result.rows[0];
-      
-      // Vérifier si le token est expiré
-      const now = new Date();
-      const expiresAt = new Date(user.spotify_token_expires_at);
-      const isExpired = now >= expiresAt;
-
-      return {
-        spotify_id: user.spotify_id,
-        access_token: user.spotify_access_token,
-        refresh_token: user.spotify_refresh_token,
-        expires_at: user.spotify_token_expires_at,
-        display_name: user.spotify_display_name,
-        profile_picture: user.spotify_profile_picture,
-        is_expired: isExpired
-      };
-    } catch (error) {
-      console.error('Error getting Spotify tokens:', error);
-      throw error;
-    }
-  }
-
-  // Supprimer les tokens Spotify d'un utilisateur (déconnexion)
-  static async clearSpotifyTokens(userId) {
-    try {
-      const result = await db.query(
-        `UPDATE users SET
-           spotify_access_token = NULL,
-           spotify_refresh_token = NULL,
-           spotify_token_expires_at = NULL,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1
-         RETURNING *`,
-        [userId]
-      );
-      
-      return result.rows[0];
-    } catch (error) {
-      console.error('Error clearing Spotify tokens:', error);
       throw error;
     }
   }
@@ -237,20 +137,6 @@ class User {
       return result.rows;
     } catch (error) {
       console.error('Error getting moderators by streamer:', error);
-      throw error;
-    }
-  }
-
-  // Mettre à jour le Spotify ID d'un utilisateur
-  static async updateSpotifyId(userId, spotifyId) {
-    try {
-      const result = await db.query(
-        'UPDATE users SET spotify_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-        [spotifyId, userId]
-      );
-      return result.rows[0];
-    } catch (error) {
-      console.error('Error updating Spotify ID:', error);
       throw error;
     }
   }
