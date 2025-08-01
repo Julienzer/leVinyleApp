@@ -233,6 +233,25 @@ class PropositionController {
       const { sessionId, propositionId } = req.params;
       const moderatorId = req.user.id;
 
+      console.log('🔍 Début approbation proposition:', {
+        sessionId,
+        propositionId,
+        moderatorId,
+        moderatorName: req.user.display_name
+      });
+
+      // Vérifier que l'utilisateur modérateur existe en base de données
+      const User = require('../models/User');
+      const moderatorUser = await User.findById(moderatorId);
+      if (!moderatorUser) {
+        console.error('❌ Utilisateur modérateur non trouvé en base:', moderatorId);
+        return res.status(400).json({ 
+          error: 'Utilisateur modérateur non trouvé. Veuillez vous reconnecter.' 
+        });
+      }
+
+      console.log('✅ Utilisateur modérateur trouvé:', moderatorUser.display_name);
+
       // Vérifier que l'utilisateur peut modérer cette session
       const session = await Session.findById(sessionId);
       if (!session) {
@@ -275,11 +294,17 @@ class PropositionController {
         return res.status(400).json({ error: 'Cette proposition a déjà été traitée' });
       }
 
+      console.log('✅ Toutes les vérifications passées, approbation de la proposition...');
+
       // Approuver la proposition
       const updatedProposition = await Proposition.approve(propositionId, moderatorId);
 
+      console.log('✅ Proposition approuvée, mise à jour des positions...');
+
       // Mettre à jour les positions de la file d'attente
       await Proposition.updateQueuePositions(sessionId, session.queue_mode);
+
+      console.log('✅ Positions mises à jour, envoi de la réponse...');
 
       res.json({
         success: true,
