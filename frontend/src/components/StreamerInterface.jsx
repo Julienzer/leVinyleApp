@@ -42,21 +42,36 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
     try {
       if (isTestMode) {
         // Utiliser les mock API en mode test
+        console.log('🧪 Mode test: Récupération simulée des morceaux approuvés');
         const response = await mockApiResponses.getPropositions(session.id, 'approved')
         setApprovedTracks(response.propositions)
         console.log('✅ Morceaux approuvés récupérés (test):', response.propositions.length)
       } else {
         // Utiliser les vraies API en mode production
+        console.log('🚀 Mode production: Appel API pour les morceaux approuvés');
         const response = await api.get(`/api/sessions/${session.id}/propositions/approved`, token)
         
         console.log('📡 Réponse API approved:', response.status, response.ok)
         
         if (response.ok) {
           const data = await response.json()
+          console.log('📊 Données reçues:', {
+            success: data.success,
+            propositionsCount: data.propositions ? data.propositions.length : 0,
+            propositions: data.propositions ? data.propositions.map(p => ({
+              id: p.id,
+              track_name: p.track_name,
+              status: p.status,
+              queue_position: p.queue_position
+            })) : []
+          });
+          
           setApprovedTracks(data.propositions)
           console.log('✅ Morceaux approuvés récupérés:', data.propositions.length)
         } else {
           console.error('❌ Erreur lors du chargement des morceaux approuvés:', response.status)
+          const errorData = await response.json().catch(() => ({}));
+          console.error('❌ Détails de l\'erreur:', errorData);
           setError('Erreur lors du chargement des morceaux approuvés')
         }
       }
@@ -196,30 +211,54 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
 
   // Approuver une proposition en attente (depuis l'interface streamer)
   const handleApprovePending = async (propositionId) => {
+    console.log('🔄 Début de l\'approbation pour la proposition:', propositionId);
     try {
       if (isTestMode) {
         // Utiliser les mock API en mode test
+        console.log('🧪 Mode test: Approbation simulée');
         await mockApiResponses.moderateProposition(session.id, propositionId, 'approved')
       } else {
         // Utiliser les vraies API en mode production
+        console.log('🚀 Mode production: Appel API d\'approbation');
         const response = await fetch(`/api/sessions/${session.id}/propositions/${propositionId}/approve`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         })
         
+        console.log('📡 Réponse API d\'approbation:', response.status, response.ok);
+        
         if (!response.ok) {
           const data = await response.json()
+          console.error('❌ Erreur API d\'approbation:', data);
           setError(data.error || 'Erreur lors de l\'approbation')
           return
         }
+        
+        const responseData = await response.json();
+        console.log('✅ Réponse d\'approbation reçue:', responseData);
       }
       
+      console.log('🔄 Mise à jour de l\'interface...');
+      
       // Retirer de la liste des propositions en attente
-      setPendingTracks(prev => prev.filter(p => p.id !== propositionId))
+      setPendingTracks(prev => {
+        const filtered = prev.filter(p => p.id !== propositionId);
+        console.log(`📊 Propositions en attente après filtrage: ${filtered.length}`);
+        return filtered;
+      });
+      
+      // Attendre un peu avant de rafraîchir pour s'assurer que la base de données est mise à jour
+      console.log('⏳ Attente de 500ms avant rafraîchissement...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Rafraîchir les morceaux approuvés
-      fetchApprovedTracks()
+      console.log('🔄 Rafraîchissement des morceaux approuvés...');
+      await fetchApprovedTracks();
+      
       setSuccess('Proposition approuvée')
+      console.log('✅ Approbation terminée avec succès');
     } catch (err) {
+      console.error('❌ Erreur lors de l\'approbation:', err);
       setError(err.message || 'Erreur réseau lors de l\'approbation')
     }
   }

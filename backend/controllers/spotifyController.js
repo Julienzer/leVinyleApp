@@ -276,9 +276,105 @@ const getSpotifyPlaylistDetails = async (req, res) => {
   }
 };
 
+// Récupérer les informations d'un track Spotify (pour preview)
+const getTrackPreview = async (req, res) => {
+  try {
+    const { trackId } = req.params;
+    
+    console.log('🎵 Récupération des infos du track:', trackId);
+    
+    // Récupérer l'utilisateur depuis le JWT
+    const userId = req.user.id;
+    
+    // Récupérer les tokens Spotify de cet utilisateur depuis la mémoire
+    const spotifyTokens = spotifyUserTokens[userId];
+    
+    if (!spotifyTokens) {
+      return res.status(401).json({
+        success: false,
+        error: 'Connexion Spotify requise. Veuillez vous connecter à Spotify.'
+      });
+    }
+
+    // Vérifier si le token est expiré
+    if (Date.now() >= spotifyTokens.expires_at) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token Spotify expiré. Veuillez vous reconnecter.'
+      });
+    }
+    
+    // Configurer l'API Spotify avec les tokens de l'utilisateur
+    const api = new spotifyApi({
+      clientId: process.env.SPOTIFY_CLIENT_ID,
+      clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+      redirectUri: process.env.SPOTIFY_REDIRECT_URI
+    });
+    
+    api.setAccessToken(spotifyTokens.access_token);
+    
+    // Récupérer les infos du track avec timeout
+    console.log('📡 Appel API Spotify pour track:', trackId);
+    const trackResponse = await api.getTrack(trackId);
+    const track = trackResponse.body;
+    
+    console.log('✅ Track récupéré:', track.name);
+    
+    res.json({
+      success: true,
+      track: {
+        id: track.id,
+        name: track.name,
+        artist: track.artists.map(a => a.name).join(', '),
+        album: track.album.name,
+        duration: track.duration_ms,
+        preview_url: track.preview_url,
+        external_url: track.external_urls.spotify,
+        embed_url: `https://open.spotify.com/embed/track/${track.id}`
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération du track:', error);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token Spotify expiré. Veuillez vous reconnecter.'
+      });
+    }
+    
+    if (error.statusCode === 404) {
+      return res.status(404).json({
+        success: false,
+        error: 'Track Spotify non trouvé'
+      });
+    }
+    
+    // En cas d'erreur, retourner un fallback avec l'embed
+    const embedUrl = `https://open.spotify.com/embed/track/${req.params.trackId}`;
+    
+    res.json({
+      success: true,
+      track: {
+        id: req.params.trackId,
+        name: 'Track inconnu',
+        artist: 'Artiste inconnu',
+        album: 'Album inconnu',
+        duration: 0,
+        preview_url: null,
+        external_url: `https://open.spotify.com/track/${req.params.trackId}`,
+        embed_url: embedUrl,
+        fallback: true
+      }
+    });
+  }
+};
+
 module.exports = {
   getSpotifyPlaylists,
   addTrackToSpotifyPlaylist,
   getSpotifyPlaylistDetails,
+  getTrackPreview,
   extractSpotifyTrackId
 }; 

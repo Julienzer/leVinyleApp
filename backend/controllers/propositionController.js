@@ -261,8 +261,18 @@ class PropositionController {
       const isStreamer = session.streamer_id === req.user.id;
       let isModerator = false;
       
-      // Vérifier si l'utilisateur est modérateur via l'API Twitch
-      if (!isStreamer) {
+      console.log('🔍 Vérification des permissions:', {
+        userId: req.user.id,
+        streamerId: session.streamer_id,
+        isStreamer,
+        sessionCode: session.code
+      });
+
+      // Si c'est le streamer, il peut toujours approuver
+      if (isStreamer) {
+        console.log('✅ Utilisateur est le streamer de la session - autorisation accordée');
+      } else {
+        // Sinon, vérifier si l'utilisateur est modérateur via l'API Twitch
         try {
           isModerator = await checkTwitchModeratorStatus(req.user.id, session.streamer_id);
           console.log('🔍 Vérification modérateur pour approbation:', {
@@ -277,7 +287,16 @@ class PropositionController {
       }
 
       if (!isStreamer && !isModerator) {
-        return res.status(403).json({ error: 'Accès refusé - Vous devez être le streamer ou un modérateur' });
+        console.log('❌ Accès refusé - Utilisateur ni streamer ni modérateur');
+        return res.status(403).json({ 
+          error: 'Accès refusé - Vous devez être le streamer ou un modérateur',
+          details: {
+            isStreamer,
+            isModerator,
+            sessionStreamerId: session.streamer_id,
+            userId: req.user.id
+          }
+        });
       }
 
       // Vérifier que la proposition existe et est en attente
@@ -308,7 +327,8 @@ class PropositionController {
 
       res.json({
         success: true,
-        proposition: updatedProposition
+        proposition: updatedProposition,
+        approvedBy: isStreamer ? 'streamer' : 'moderator'
       });
     } catch (error) {
       console.error('Error approving proposition:', error);
