@@ -1,5 +1,6 @@
 const spotifyApi = require('spotify-web-api-node');
 const User = require('../models/User');
+const { spotifyUserTokens } = require('../auth');
 
 // Récupérer les playlists Spotify de l'utilisateur
 const getSpotifyPlaylists = async (req, res) => {
@@ -10,13 +11,21 @@ const getSpotifyPlaylists = async (req, res) => {
     const userId = req.user.id; // Vient du middleware requireAuth
     console.log('👤 Utilisateur Twitch:', userId);
     
-    // Récupérer les tokens Spotify de cet utilisateur
-    const spotifyTokens = await User.getSpotifyTokens(userId);
+    // Récupérer les tokens Spotify de cet utilisateur depuis la mémoire
+    const spotifyTokens = spotifyUserTokens[userId];
     
-    if (!spotifyTokens || spotifyTokens.is_expired) {
+    if (!spotifyTokens) {
       return res.status(401).json({
         success: false,
-        error: 'Connexion Spotify requise ou expirée. Veuillez vous reconnecter.'
+        error: 'Connexion Spotify requise. Veuillez vous connecter à Spotify.'
+      });
+    }
+
+    // Vérifier si le token est expiré
+    if (Date.now() >= spotifyTokens.expires_at) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token Spotify expiré. Veuillez vous reconnecter.'
       });
     }
     
@@ -94,13 +103,21 @@ const addTrackToSpotifyPlaylist = async (req, res) => {
     // Récupérer l'utilisateur depuis le JWT
     const userId = req.user.id; // Vient du middleware requireAuth
     
-    // Récupérer les tokens Spotify de cet utilisateur
-    const spotifyTokens = await User.getSpotifyTokens(userId);
+    // Récupérer les tokens Spotify de cet utilisateur depuis la mémoire
+    const spotifyTokens = spotifyUserTokens[userId];
     
-    if (!spotifyTokens || spotifyTokens.is_expired) {
+    if (!spotifyTokens) {
       return res.status(401).json({
         success: false,
-        error: 'Connexion Spotify requise ou expirée'
+        error: 'Connexion Spotify requise. Veuillez vous connecter à Spotify.'
+      });
+    }
+
+    // Vérifier si le token est expiré
+    if (Date.now() >= spotifyTokens.expires_at) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token Spotify expiré. Veuillez vous reconnecter.'
       });
     }
     
@@ -198,13 +215,21 @@ const getSpotifyPlaylistDetails = async (req, res) => {
     // Récupérer l'utilisateur depuis le JWT
     const userId = req.user.id; // Vient du middleware requireAuth
     
-    // Récupérer les tokens Spotify de cet utilisateur
-    const spotifyTokens = await User.getSpotifyTokens(userId);
+    // Récupérer les tokens Spotify de cet utilisateur depuis la mémoire
+    const spotifyTokens = spotifyUserTokens[userId];
     
-    if (!spotifyTokens || spotifyTokens.is_expired) {
+    if (!spotifyTokens) {
       return res.status(401).json({
         success: false,
-        error: 'Connexion Spotify requise ou expirée'
+        error: 'Connexion Spotify requise. Veuillez vous connecter à Spotify.'
+      });
+    }
+
+    // Vérifier si le token est expiré
+    if (Date.now() >= spotifyTokens.expires_at) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token Spotify expiré. Veuillez vous reconnecter.'
       });
     }
     

@@ -1,4 +1,5 @@
 const SpotifyWebApi = require('spotify-web-api-node');
+const { spotifyUserTokens } = require('../auth');
 require('dotenv').config();
 
 const spotifyApi = new SpotifyWebApi({
@@ -75,15 +76,16 @@ class SpotifyService {
   static async addToPlaylist(trackId, playlistId, userId) {
     console.log('🎵 Adding track to playlist:', { trackId, playlistId, userId });
 
-    // Récupérer les tokens Spotify de l'utilisateur
-    const spotifyTokens = await User.getSpotifyTokens(userId);
+    // Récupérer les tokens Spotify de l'utilisateur depuis la mémoire
+    const spotifyTokens = spotifyUserTokens[userId];
     
     if (!spotifyTokens) {
       console.error('❌ No Spotify tokens found for user:', userId);
       throw new Error('Aucun token utilisateur Spotify disponible. Veuillez vous authentifier via /api/auth/spotify.');
     }
 
-    if (spotifyTokens.is_expired) {
+    // Vérifier si le token est expiré
+    if (Date.now() >= spotifyTokens.expires_at) {
       console.error('❌ Spotify tokens expired for user:', userId);
       throw new Error('Token Spotify expiré. Veuillez vous réauthentifier via /api/auth/spotify.');
     }
