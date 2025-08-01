@@ -1,7 +1,15 @@
 -- ===== SCRIPT DE RÉINITIALISATION COMPLÈTE =====
 -- Supprime et recrée toute la base de données Le Vinyle
--- Version mise à jour SANS support Spotify (stockage en mémoire comme Twitch)
+-- Version optimisée pour multi-utilisateurs (Spotify en mémoire, Twitch en mémoire)
+-- Date: $(date)
+-- Architecture: Multi-users avec isolation complète des tokens
 
+-- ===== CONFIGURATION =====
+-- Spotify: Tokens stockés en mémoire (spotifyUserTokens[userId])
+-- Twitch: Tokens stockés en mémoire (twitchUserTokens[userId]) 
+-- Base de données: Structure pure pour sessions, propositions, playlists
+
+-- ===== SUPPRESSION COMPLÈTE =====
 -- Supprimer toutes les tables existantes (ordre important à cause des clés étrangères)
 DROP TABLE IF EXISTS playlist_tracks CASCADE;
 DROP TABLE IF EXISTS playlists CASCADE;
@@ -21,26 +29,26 @@ DROP FUNCTION IF EXISTS get_session_cleanup_stats() CASCADE;
 
 -- ===== RECRÉATION DE LA STRUCTURE COMPLÈTE =====
 
--- ===== TABLE USERS (SANS colonnes Spotify - stockage en mémoire comme Twitch) =====
+-- ===== TABLE USERS (PURE - SANS TOKENS) =====
+-- Cette table ne contient QUE les informations de base des utilisateurs
+-- Tous les tokens (Spotify, Twitch) sont stockés en mémoire pour l'isolation
 CREATE TABLE users (
-    id VARCHAR(255) PRIMARY KEY,  -- ID Twitch
+    id VARCHAR(255) PRIMARY KEY,  -- ID Twitch (clé primaire)
     display_name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     role VARCHAR(50) DEFAULT 'viewer',  -- viewer, moderator, streamer
     is_streamer BOOLEAN DEFAULT FALSE,
     
-    -- SPOTIFY SUPPRIMÉ : Tous les tokens et données Spotify sont maintenant stockés en mémoire
-    -- Plus de colonnes spotify_* dans la base de données
-    
-    -- Profil Twitch uniquement
+    -- PROFIL TWITCH UNIQUEMENT
     profile_picture VARCHAR(512),  -- URL photo profil Twitch
     
-    -- Timestamps
+    -- TIMESTAMPS
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===== TABLE SESSIONS =====
+-- Gestion des sessions de streaming avec codes d'accès
 CREATE TABLE sessions (
     id SERIAL PRIMARY KEY,
     code VARCHAR(255) NOT NULL UNIQUE,  -- Code d'accès (ex: "julien", "test123")
@@ -51,17 +59,18 @@ CREATE TABLE sessions (
     queue_mode VARCHAR(50) DEFAULT 'chronological',  -- chronological, random
     active BOOLEAN DEFAULT TRUE,
     
-    -- Gestion automatique et expiration
+    -- GESTION AUTOMATIQUE ET EXPIRATION
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP DEFAULT NULL,
     auto_cleanup BOOLEAN DEFAULT TRUE,
     
-    -- Timestamps
+    -- TIMESTAMPS
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===== TABLE PROPOSITIONS =====
+-- Morceaux proposés par les viewers dans une session
 CREATE TABLE propositions (
     id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -75,18 +84,18 @@ CREATE TABLE propositions (
     status VARCHAR(50) DEFAULT 'pending',  -- pending, approved, rejected, added
     queue_position INTEGER,
     
-    -- Modération
+    -- MODÉRATION
     moderated_at TIMESTAMP,
     moderator_id VARCHAR(255) REFERENCES users(id),
     added_at TIMESTAMP,
     
-    -- Timestamps
+    -- TIMESTAMPS
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===== TABLE SESSION_HISTORY =====
--- Pour l'historique des morceaux joués (gestion des doublons inter-sessions)
-CREATE TABLE IF NOT EXISTS session_history (
+-- Historique des morceaux joués (gestion des doublons inter-sessions)
+CREATE TABLE session_history (
     id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     streamer_id VARCHAR(255) NOT NULL REFERENCES users(id),
@@ -98,7 +107,7 @@ CREATE TABLE IF NOT EXISTS session_history (
 
 -- ===== TABLE MODERATORS =====
 -- Relation many-to-many entre streamers et modérateurs
-CREATE TABLE IF NOT EXISTS moderators (
+CREATE TABLE moderators (
     id SERIAL PRIMARY KEY,
     streamer_id VARCHAR(255) NOT NULL REFERENCES users(id),
     moderator_id VARCHAR(255) NOT NULL REFERENCES users(id),
@@ -106,27 +115,58 @@ CREATE TABLE IF NOT EXISTS moderators (
     UNIQUE(streamer_id, moderator_id)
 );
 
+-- ===== TABLE PLAYLISTS =====
+-- Playlists créées par les streamers
+CREATE TABLE playlists (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    streamer_id TEXT NOT NULL REFERENCES users(id),
+    spotify_playlist_id TEXT DEFAULT NULL,  -- ID de la playlist Spotify (si synchronisée)
+    tracks_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ===== TABLE PLAYLIST_TRACKS =====
+-- Relation many-to-many entre playlists et tracks (propositions)
+CREATE TABLE playlist_tracks (
+    id TEXT PRIMARY KEY,
+    playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    track_id INTEGER NOT NULL REFERENCES propositions(id) ON DELETE CASCADE,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(playlist_id, track_id)
+);
+
 -- ===== INDEX POUR PERFORMANCES =====
 -- Sessions
-CREATE INDEX IF NOT EXISTS idx_sessions_code ON sessions(code);
-CREATE INDEX IF NOT EXISTS idx_sessions_streamer ON sessions(streamer_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(active);
+CREATE INDEX idx_sessions_code ON sessions(code);
+CREATE INDEX idx_sessions_streamer ON sessions(streamer_id);
+CREATE INDEX idx_sessions_active ON sessions(active);
+CREATE INDEX idx_sessions_last_activity ON sessions(last_activity);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX idx_sessions_auto_cleanup ON sessions(auto_cleanup);
 
 -- Propositions
-CREATE INDEX IF NOT EXISTS idx_propositions_session ON propositions(session_id);
-CREATE INDEX IF NOT EXISTS idx_propositions_viewer ON propositions(viewer_id);
-CREATE INDEX IF NOT EXISTS idx_propositions_status ON propositions(status);
-CREATE INDEX IF NOT EXISTS idx_propositions_queue ON propositions(queue_position);
-CREATE INDEX IF NOT EXISTS idx_propositions_created ON propositions(created_at);
+CREATE INDEX idx_propositions_session ON propositions(session_id);
+CREATE INDEX idx_propositions_viewer ON propositions(viewer_id);
+CREATE INDEX idx_propositions_status ON propositions(status);
+CREATE INDEX idx_propositions_queue ON propositions(queue_position);
+CREATE INDEX idx_propositions_created ON propositions(created_at);
 
 -- Session History
-CREATE INDEX IF NOT EXISTS idx_history_session ON session_history(session_id);
-CREATE INDEX IF NOT EXISTS idx_history_streamer ON session_history(streamer_id);
-CREATE INDEX IF NOT EXISTS idx_history_spotify_url ON session_history(spotify_url);
+CREATE INDEX idx_history_session ON session_history(session_id);
+CREATE INDEX idx_history_streamer ON session_history(streamer_id);
+CREATE INDEX idx_history_spotify_url ON session_history(spotify_url);
 
 -- Moderators
-CREATE INDEX IF NOT EXISTS idx_moderators_streamer ON moderators(streamer_id);
-CREATE INDEX IF NOT EXISTS idx_moderators_moderator ON moderators(moderator_id);
+CREATE INDEX idx_moderators_streamer ON moderators(streamer_id);
+CREATE INDEX idx_moderators_moderator ON moderators(moderator_id);
+
+-- Playlists
+CREATE INDEX idx_playlists_streamer ON playlists(streamer_id);
+CREATE INDEX idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
+CREATE INDEX idx_playlist_tracks_track ON playlist_tracks(track_id);
 
 -- ===== FONCTIONS UTILITAIRES =====
 -- Fonction pour mettre à jour updated_at automatiquement
@@ -145,56 +185,10 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
 CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- ===== TABLE PLAYLISTS =====
--- Table pour stocker les playlists des streamers
-CREATE TABLE IF NOT EXISTS playlists (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    streamer_id TEXT NOT NULL REFERENCES users(id),
-    spotify_playlist_id TEXT DEFAULT NULL,
-    tracks_count INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table de liaison entre playlists et tracks
-CREATE TABLE IF NOT EXISTS playlist_tracks (
-    id TEXT PRIMARY KEY,
-    playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-    track_id INTEGER NOT NULL REFERENCES propositions(id) ON DELETE CASCADE,
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(playlist_id, track_id)
-);
-
--- Index pour optimiser les requêtes des playlists
-CREATE INDEX IF NOT EXISTS idx_playlists_streamer ON playlists(streamer_id);
-CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
-CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks(track_id);
-
--- Trigger pour updated_at sur playlists
 CREATE TRIGGER update_playlists_updated_at BEFORE UPDATE ON playlists
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ===== GESTION AUTOMATIQUE DES SESSIONS =====
-
--- Ajouter des colonnes pour traquer l'activité et l'expiration (si elles n'existent pas)
-ALTER TABLE sessions 
-ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP DEFAULT NULL,
-ADD COLUMN IF NOT EXISTS auto_cleanup BOOLEAN DEFAULT TRUE;
-
--- Mettre à jour les sessions existantes avec l'activité actuelle
-UPDATE sessions 
-SET last_activity = updated_at 
-WHERE last_activity IS NULL;
-
--- ===== INDEX POUR NETTOYAGE AUTOMATIQUE =====
-CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_sessions_auto_cleanup ON sessions(auto_cleanup);
-
--- ===== FONCTION DE NETTOYAGE AUTOMATIQUE =====
 
 -- Fonction pour nettoyer les sessions inactives
 CREATE OR REPLACE FUNCTION cleanup_inactive_sessions(
@@ -356,5 +350,7 @@ ON CONFLICT DO NOTHING;
 -- 🔄 ARCHITECTURE : Spotify utilise maintenant le stockage en mémoire comme Twitch
 -- ✅ CONSERVÉ : Structure de base pour sessions, propositions, playlists
 -- 💾 STOCKAGE SPOTIFY : Backend auth.js > spotifyUserTokens (mémoire)
+-- 🔒 ISOLATION : Chaque utilisateur a ses propres tokens isolés
+-- ⚡ PERFORMANCE : Index optimisés pour toutes les requêtes fréquentes
 
-SELECT 'Base de données réinitialisée - Spotify maintenant géré en mémoire comme Twitch' as status; 
+SELECT 'Base de données réinitialisée - Architecture multi-utilisateurs optimisée' as status; 
