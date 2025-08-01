@@ -8,6 +8,10 @@ require('dotenv').config();
 
 const router = express.Router();
 
+// Variables globales pour les tokens
+let twitchUserTokens = {}; // Stockage des tokens Twitch pour la modération
+let spotifyUserTokens = {}; // Stockage des tokens Spotify en mémoire
+
 // Session configuration is handled globally in server.js
 // No need for separate session config here
 
@@ -38,8 +42,28 @@ router.get('/twitch', (req, res) => {
 
 // Callback OAuth Twitch
 router.get('/twitch/callback', async (req, res) => {
-  console.log('Received Twitch callback');
-  console.log('Query params:', req.query);
+  console.log('🔄 Received Twitch callback');
+  console.log('📥 Query params:', req.query);
+
+  // Vérification des variables d'environnement requises
+  const requiredEnvVars = {
+    JWT_SECRET: process.env.JWT_SECRET,
+    TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID,
+    TWITCH_CLIENT_SECRET: process.env.TWITCH_CLIENT_SECRET,
+    TWITCH_REDIRECT_URI: process.env.TWITCH_REDIRECT_URI
+  };
+
+  const missingVars = Object.entries(requiredEnvVars)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+
+  if (missingVars.length > 0) {
+    console.error('❌ Missing environment variables:', missingVars);
+    return res.status(500).json({ 
+      error: 'Server configuration error',
+      details: `Missing environment variables: ${missingVars.join(', ')}`
+    });
+  }
 
   const { code, state } = req.query;
   
@@ -137,17 +161,32 @@ router.get('/twitch/callback', async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/?token=${token}`);
   } catch (error) {
-    console.error('Error in callback:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Authentication failed' });
+    console.error('❌ Error in Twitch callback:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      stack: error.stack
+    });
+    
+    // Log des variables d'environnement (sans les secrets)
+    console.error('🔍 Environment check:', {
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      hasTwitchClientId: !!process.env.TWITCH_CLIENT_ID,
+      hasTwitchClientSecret: !!process.env.TWITCH_CLIENT_SECRET,
+      hasTwitchRedirectUri: !!process.env.TWITCH_REDIRECT_URI,
+      redirectUri: process.env.TWITCH_REDIRECT_URI
+    });
+    
+    res.status(500).json({ 
+      error: 'Authentication failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 
 // --- Variables globales supprimées : plus de tokens partagés ! ---
 // Les tokens Spotify sont maintenant stockés en base de données par utilisateur
 // Les tokens Twitch sont utilisés uniquement pour les JWT
-
-let twitchUserTokens = {}; // Garde seulement pour la modération Twitch
-let spotifyUserTokens = {}; // Nouveau : stockage Spotify en mémoire comme Twitch
 
 router.get('/spotify', (req, res) => {
   console.log('🎵 [Backend] === DÉBUT AUTHENTIFICATION SPOTIFY ===');
