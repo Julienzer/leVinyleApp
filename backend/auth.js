@@ -85,6 +85,14 @@ router.get('/twitch/callback', async (req, res) => {
 
   try {
     // Échange le code contre un token
+    console.log('🔄 Échange du code contre un token...');
+    console.log('🔍 Configuration utilisée:', {
+      client_id: process.env.TWITCH_CLIENT_ID ? `${process.env.TWITCH_CLIENT_ID.substring(0, 10)}...` : 'undefined',
+      client_secret: process.env.TWITCH_CLIENT_SECRET ? `${process.env.TWITCH_CLIENT_SECRET.substring(0, 10)}...` : 'undefined',
+      redirect_uri: process.env.TWITCH_REDIRECT_URI,
+      code: code ? `${code.substring(0, 10)}...` : 'undefined'
+    });
+    
     const tokenResponse = await axios.post('https://id.twitch.tv/oauth2/token', null, {
       params: {
         client_id: process.env.TWITCH_CLIENT_ID,
@@ -95,7 +103,12 @@ router.get('/twitch/callback', async (req, res) => {
       }
     });
 
-    console.log('Token response:', tokenResponse.data);
+    console.log('✅ Token response reçue:', {
+      hasAccessToken: !!tokenResponse.data.access_token,
+      tokenType: tokenResponse.data.token_type,
+      expiresIn: tokenResponse.data.expires_in,
+      scope: tokenResponse.data.scope
+    });
     const { access_token } = tokenResponse.data;
 
     // Récupère les infos de l'utilisateur
@@ -177,9 +190,33 @@ router.get('/twitch/callback', async (req, res) => {
       redirectUri: process.env.TWITCH_REDIRECT_URI
     });
     
+    // Gestion spécifique des erreurs Twitch
+    let errorMessage = 'Authentication failed';
+    let errorDetails = 'Internal server error';
+    
+    if (error.response?.status === 400) {
+      const twitchError = error.response.data;
+      if (twitchError.error === 'invalid_grant') {
+        errorMessage = 'Invalid authorization code';
+        errorDetails = 'The authorization code is invalid or has expired. Please try logging in again.';
+      } else if (twitchError.error === 'invalid_client') {
+        errorMessage = 'Invalid client credentials';
+        errorDetails = 'The client ID or client secret is incorrect. Please check your Twitch application configuration.';
+      } else if (twitchError.error === 'invalid_redirect_uri') {
+        errorMessage = 'Invalid redirect URI';
+        errorDetails = 'The redirect URI does not match the one configured in your Twitch application.';
+      } else {
+        errorMessage = `Twitch OAuth error: ${twitchError.error}`;
+        errorDetails = twitchError.message || 'Unknown Twitch OAuth error';
+      }
+    } else if (error.response?.status === 401) {
+      errorMessage = 'Unauthorized';
+      errorDetails = 'Invalid client credentials. Please check your Twitch client secret.';
+    }
+    
     res.status(500).json({ 
-      error: 'Authentication failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? errorDetails : 'Internal server error'
     });
   }
 });
