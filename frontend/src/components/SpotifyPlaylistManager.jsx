@@ -7,6 +7,7 @@ const SpotifyPlaylistManager = ({
   token, 
   selectedPlaylistId, 
   onPlaylistSelect, 
+  onPlaylistsLoaded,
   isTestMode = false 
 }) => {
   const [playlists, setPlaylists] = useState([]);
@@ -99,6 +100,10 @@ const SpotifyPlaylistManager = ({
         // Simuler un délai réseau
         await new Promise(resolve => setTimeout(resolve, 1000));
         setPlaylists(mockSpotifyPlaylists);
+        // Passer les playlists au composant parent
+        if (onPlaylistsLoaded) {
+          onPlaylistsLoaded(mockSpotifyPlaylists);
+        }
       } else {
         const response = await api.get('/api/spotify/playlists', token);
         
@@ -107,7 +112,12 @@ const SpotifyPlaylistManager = ({
         }
         
         const data = await response.json();
-        setPlaylists(data.playlists || []);
+        const playlistsData = data.playlists || [];
+        setPlaylists(playlistsData);
+        // Passer les playlists au composant parent
+        if (onPlaylistsLoaded) {
+          onPlaylistsLoaded(playlistsData);
+        }
       }
     } catch (err) {
       setError(err.message);

@@ -15,6 +15,8 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('')
   const [showPlaylistManager, setShowPlaylistManager] = useState(false)
+  const [playlists, setPlaylists] = useState([])
+  const [toast, setToast] = useState(null)
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,6 +38,16 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
     
     loadData()
   }, [])
+
+  // Auto-hide toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
 
   const fetchApprovedTracks = async () => {
     console.log('🔄 Récupération des morceaux approuvés...')
@@ -127,6 +139,44 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
       }
     } catch (err) {
       console.error('Erreur lors du chargement des statistiques:', err)
+    }
+  }
+
+  const handlePlaylistsLoaded = (playlistsData) => {
+    setPlaylists(playlistsData);
+    
+    // Si une playlist est déjà sélectionnée, mettre à jour le toast avec le vrai nom
+    if (selectedPlaylistId) {
+      const playlistName = playlistsData.find(p => p.id === selectedPlaylistId)?.name;
+      if (playlistName) {
+        setToast({
+          type: 'success',
+          message: `✅ Playlist active : ${playlistName}`
+        });
+      }
+    }
+  }
+
+  const handlePlaylistSelect = (playlistId) => {
+    setSelectedPlaylistId(playlistId);
+    
+    // Afficher un toast si une playlist est sélectionnée
+    if (playlistId) {
+      // Chercher le nom de la playlist dans les playlists chargées
+      const playlistName = playlists.find(p => p.id === playlistId)?.name;
+      
+      if (playlistName) {
+        setToast({
+          type: 'success',
+          message: `✅ Playlist active : ${playlistName}`
+        });
+      } else {
+        // Si le nom n'est pas encore disponible, afficher l'ID temporairement
+        setToast({
+          type: 'success',
+          message: `✅ Playlist active : ${playlistId}`
+        });
+      }
     }
   }
 
@@ -595,17 +645,45 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
           user={user}
           token={token}
           selectedPlaylistId={selectedPlaylistId}
-          onPlaylistSelect={setSelectedPlaylistId}
+          onPlaylistSelect={handlePlaylistSelect}
+          onPlaylistsLoaded={handlePlaylistsLoaded}
           isTestMode={isTestMode}
         />
       )}
 
-      {/* Indicateur de playlist sélectionnée */}
-      {selectedPlaylistId && !showPlaylistManager && (
-        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-          <p className="text-green-400 font-medium">
-            ✅ Playlist active : {selectedPlaylistId}
-          </p>
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 max-w-sm">
+          <div className={`rounded-lg p-4 shadow-lg backdrop-blur-md border transition-all duration-300 transform ${
+            toast.type === 'success' 
+              ? 'bg-green-600/90 border-green-500 text-white' 
+              : 'bg-red-600/90 border-red-500 text-white'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="mr-3">
+                  {toast.type === 'success' ? (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <p className="text-sm font-medium">{toast.message}</p>
+              </div>
+              <button
+                onClick={() => setToast(null)}
+                className="ml-4 text-white hover:text-gray-200 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

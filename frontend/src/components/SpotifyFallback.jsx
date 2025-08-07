@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const SpotifyFallback = ({ spotifyUrl, compact = true }) => {
+const SpotifyFallback = ({ spotifyUrl, compact = true, width = "100%" }) => {
   const [trackId, setTrackId] = useState(null);
   const [error, setError] = useState(null);
 
@@ -48,21 +48,31 @@ const SpotifyFallback = ({ spotifyUrl, compact = true }) => {
   }
 
   const height = compact ? 152 : 380;
+  // Remettre le thème original de Spotify
   const embedUrl = `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&theme=0`;
 
   return (
     <div className="relative">
-      <iframe
-        src={embedUrl}
-        width="100%"
-        height={height}
-        frameBorder="0"
-        allowtransparency="true"
-        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        loading="lazy"
-        className="rounded-lg"
-        onError={() => setError('Impossible de charger le lecteur Spotify')}
-      />
+      {/* Lecteur Spotify simple avec coins arrondis */}
+      <div className="rounded-lg overflow-hidden">
+        <iframe
+          src={embedUrl}
+          width={width}
+          height={height}
+          frameBorder="0"
+          allowtransparency="true"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+          style={{
+            display: 'block',
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            borderRadius: '0.5rem'
+          }}
+          onError={() => setError('Impossible de charger le lecteur Spotify')}
+        />
+      </div>
       <div className="mt-2 text-xs text-gray-500 text-center">
         🎵 Lecteur Spotify (fallback)
       </div>
