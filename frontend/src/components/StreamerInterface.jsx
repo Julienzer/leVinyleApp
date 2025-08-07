@@ -355,106 +355,135 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
     }
   }
 
-  const TrackCard = ({ track }) => (
-    <div className="bg-[#3A3A3A] rounded-lg p-6 border border-[#555] hover:border-[#FF4FAD]/50 transition-colors">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="text-white font-bold text-lg mb-1">
-            {track.track_name || 'Morceau inconnu'}
-          </h3>
-          <p className="text-gray-400 mb-2">
-            {track.artist || 'Artiste inconnu'}
-          </p>
-          <div className="flex items-center space-x-4 text-sm">
-            <span className="text-[#FF4FAD]">
-              Proposé par <span className="font-medium">{track.viewer_name}</span>
-            </span>
-            <span className="text-gray-500">
-              {new Date(track.created_at).toLocaleString()}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-            track.status === 'added' 
-              ? 'bg-blue-500/20 text-blue-400' 
-              : 'bg-green-500/20 text-green-400'
-          }`}>
-            {track.status === 'added' ? 'Ajouté' : 'Approuvé'}
-          </span>
-          {track.status === 'added' && (
-            <span className="text-gray-500 text-xs">
-              {new Date(track.added_at).toLocaleString()}
-            </span>
-          )}
-        </div>
-      </div>
+  const TrackCard = ({ track }) => {
+    // Fonction pour extraire le titre et l'artiste du track_name
+    const extractTrackInfo = (trackName) => {
+      if (!trackName) return { title: 'Morceau inconnu', artist: 'Artiste inconnu' };
+      
+      // Si track_name contient "Artiste - Titre", on extrait
+      if (trackName.includes(' - ')) {
+        const parts = trackName.split(' - ');
+        if (parts.length >= 2) {
+          return {
+            artist: parts[0].trim(),
+            title: parts.slice(1).join(' - ').trim() // En cas de tirets dans le titre
+          };
+        }
+      }
+      
+      // Sinon, on utilise track_name comme titre et track.artist comme artiste
+      return {
+        title: trackName,
+        artist: track.artist || 'Artiste inconnu'
+      };
+    };
 
-      {track.message && (
-        <div className="bg-[#2D0036]/60 rounded-lg p-3 mb-4">
-          <p className="text-gray-300 text-sm italic">
-            Message: "{track.message}"
-          </p>
-        </div>
-      )}
+    const { title, artist } = extractTrackInfo(track.track_name);
 
-      {/* Lecteur Spotify embeddé */}
-      {track.spotify_url && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-white font-medium text-sm">🎵 Lecteur Spotify</h4>
-            <a
-              href={track.spotify_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#1DB954] hover:text-[#1DB954]/80 text-xs transition-colors"
-            >
-              Ouvrir dans Spotify
-            </a>
-          </div>
-          <SpotifyPlayer 
-            spotifyUrl={track.spotify_url} 
-            compact={true}
-            width="100%"
-          />
-        </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          {/* Actions supplémentaires si besoin */}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center space-x-2">
-          {track.status === 'approved' ? (
-            <>
-              <button
-                onClick={() => handleAddToPlaylist(track.id)}
-                className="flex items-center space-x-2 px-4 py-2 bg-[#FF4FAD] text-white rounded-lg hover:bg-[#FF4FAD]/80 transition-colors"
-              >
-                <MusicalNoteIcon className="w-4 h-4" />
-                <span className="text-sm">Ajouter à la playlist</span>
-              </button>
-              <button
-                onClick={() => handleReject(track.id)}
-                className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
-                title="Refuser"
-              >
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </>
-          ) : (
-            <div className="flex items-center space-x-2 text-blue-400 text-sm">
-              <CheckIcon className="w-4 h-4" />
-              <span>Ajouté à la playlist</span>
+    return (
+      <div className="bg-[#3A3A3A] rounded-lg p-6 border border-[#555] hover:border-[#FF4FAD]/50 transition-colors">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <h3 className="text-white font-bold text-lg mb-1">
+              {title}
+            </h3>
+            <p className="text-gray-400 mb-2">
+              {artist}
+            </p>
+            <div className="flex items-center space-x-4 text-sm">
+              <span className="text-[#FF4FAD]">
+                Proposé par <span className="font-medium">{track.viewer_name}</span>
+              </span>
+              <span className="text-gray-500">
+                {new Date(track.created_at).toLocaleString()}
+              </span>
+              <span className="text-gray-500">
+                ⏱️ {track.duration || 'Durée inconnue'}
+              </span>
             </div>
-          )}
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+              track.status === 'added' 
+                ? 'bg-blue-500/20 text-blue-400' 
+                : 'bg-green-500/20 text-green-400'
+            }`}>
+              {track.status === 'added' ? 'Ajouté' : 'Approuvé'}
+            </span>
+            {track.status === 'added' && (
+              <span className="text-gray-500 text-xs">
+                {new Date(track.added_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {track.message && (
+          <div className="bg-[#2D0036]/60 rounded-lg p-3 mb-4">
+            <p className="text-gray-300 text-sm italic">
+              Message: "{track.message}"
+            </p>
+          </div>
+        )}
+
+        {/* Lecteur Spotify embeddé */}
+        {track.spotify_url && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-white font-medium text-sm">🎵 Lecteur Spotify</h4>
+              <a
+                href={track.spotify_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1DB954] hover:text-[#1DB954]/80 text-xs transition-colors"
+              >
+                Ouvrir dans Spotify
+              </a>
+            </div>
+            <SpotifyPlayer 
+              spotifyUrl={track.spotify_url} 
+              compact={true}
+              width="100%"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            {/* Actions supplémentaires si besoin */}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center space-x-2">
+            {track.status === 'approved' ? (
+              <>
+                <button
+                  onClick={() => handleAddToPlaylist(track.id)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-[#FF4FAD] text-white rounded-lg hover:bg-[#FF4FAD]/80 transition-colors"
+                >
+                  <MusicalNoteIcon className="w-4 h-4" />
+                  <span className="text-sm">Ajouter à la playlist</span>
+                </button>
+                <button
+                  onClick={() => handleReject(track.id)}
+                  className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
+                  title="Refuser"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center space-x-2 text-blue-400 text-sm">
+                <CheckIcon className="w-4 h-4" />
+                <span>Ajouté à la playlist</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
+    );
+  };
 
   if (loading) {
     return (
@@ -728,64 +757,90 @@ export default function StreamerInterface({ session, user, token, isTestMode }) 
 }
 
 // Composant pour afficher les propositions en attente
-const PendingTrackCard = ({ track, onApprove, onReject }) => (
-  <div className="bg-[#3A3A3A] rounded-lg p-6 border border-[#555] hover:border-[#DBFFA8]/50 transition-colors">
-    <div className="flex items-start justify-between mb-4">
-      <div className="flex-1">
-        <h3 className="text-white font-bold text-lg mb-1">
-          {track.track_name || 'Morceau inconnu'}
-        </h3>
-        <p className="text-gray-400 mb-2">
-          {track.artist || 'Artiste inconnu'} {track.album ? `• ${track.album}` : ''}
-        </p>
-        <div className="flex items-center space-x-4 text-sm text-gray-500">
-          <span>⏱️ {track.duration || 'Durée inconnue'}</span>
-          <span>👤 {track.viewer_name || 'Anonyme'}</span>
-          <span>📅 {new Date(track.created_at).toLocaleString()}</span>
-        </div>
-        {track.message && (
-          <div className="mt-3 p-3 bg-[#2D2D2D] rounded-lg border-l-4 border-[#DBFFA8]">
-            <p className="text-gray-300 text-sm italic">"{track.message}"</p>
-          </div>
-        )}
-      </div>
-      <div className="flex space-x-2 ml-4">
-        <button
-          onClick={onApprove}
-          className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-          title="Approuver"
-        >
-          <CheckIcon className="w-5 h-5" />
-        </button>
-        <button
-          onClick={onReject}
-          className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-          title="Rejeter"
-        >
-          <XMarkIcon className="w-5 h-5" />
-        </button>
-      </div>
-    </div>
+const PendingTrackCard = ({ track, onApprove, onReject }) => {
+  // Fonction pour extraire le titre et l'artiste du track_name
+  const extractTrackInfo = (trackName) => {
+    if (!trackName) return { title: 'Morceau inconnu', artist: 'Artiste inconnu' };
     
-    {track.spotify_url && (
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-white font-medium text-sm">🎵 Écouter le morceau</h4>
-          <a
-            href={track.spotify_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#1DB954] hover:text-[#1DB954]/80 text-xs transition-colors"
-          >
-            Ouvrir dans Spotify
-          </a>
+    // Si track_name contient "Artiste - Titre", on extrait
+    if (trackName.includes(' - ')) {
+      const parts = trackName.split(' - ');
+      if (parts.length >= 2) {
+        return {
+          artist: parts[0].trim(),
+          title: parts.slice(1).join(' - ').trim() // En cas de tirets dans le titre
+        };
+      }
+    }
+    
+    // Sinon, on utilise track_name comme titre et track.artist comme artiste
+    return {
+      title: trackName,
+      artist: track.artist || 'Artiste inconnu'
+    };
+  };
+
+  const { title, artist } = extractTrackInfo(track.track_name);
+
+  return (
+    <div className="bg-[#3A3A3A] rounded-lg p-6 border border-[#555] hover:border-[#DBFFA8]/50 transition-colors">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <h3 className="text-white font-bold text-lg mb-1">
+            {title}
+          </h3>
+          <p className="text-gray-400 mb-2">
+            {artist} {track.album ? `• ${track.album}` : ''}
+          </p>
+          <div className="flex items-center space-x-4 text-sm text-gray-500">
+            <span>⏱️ {track.duration || 'Durée inconnue'}</span>
+            <span>👤 {track.viewer_name || 'Anonyme'}</span>
+            <span>📅 {new Date(track.created_at).toLocaleString()}</span>
+          </div>
+          {track.message && (
+            <div className="mt-3 p-3 bg-[#2D2D2D] rounded-lg border-l-4 border-[#DBFFA8]">
+              <p className="text-gray-300 text-sm italic">"{track.message}"</p>
+            </div>
+          )}
         </div>
-        <SpotifyPlayer 
-          spotifyUrl={track.spotify_url} 
-          compact={true}
-          width="100%"
-        />
+        <div className="flex space-x-2 ml-4">
+          <button
+            onClick={onApprove}
+            className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
+            title="Approuver"
+          >
+            <CheckIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={onReject}
+            className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+            title="Rejeter"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
       </div>
-    )}
-  </div>
-) 
+      
+      {track.spotify_url && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-white font-medium text-sm">🎵 Écouter le morceau</h4>
+            <a
+              href={track.spotify_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#1DB954] hover:text-[#1DB954]/80 text-xs transition-colors"
+            >
+              Ouvrir dans Spotify
+            </a>
+          </div>
+          <SpotifyPlayer 
+            spotifyUrl={track.spotify_url} 
+            compact={true}
+            width="100%"
+          />
+        </div>
+      )}
+    </div>
+  );
+}; 

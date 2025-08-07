@@ -406,36 +406,65 @@ export default function ViewerInterface({ session, user, token, isTestMode }) {
                 Aucune proposition pour le moment
               </p>
             ) : (
-              myPropositions.map((proposition) => (
-                <div
-                  key={proposition.id}
-                  className="p-4 bg-[#3A3A3A] rounded-lg border border-[#555]"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h4 className="text-white font-medium text-sm">
-                        {proposition.track_name || 'Morceau'}
-                      </h4>
-                      <p className="text-gray-400 text-xs">
-                        {proposition.artist || 'Artiste inconnu'}
-                      </p>
+              myPropositions.map((proposition) => {
+                // Fonction pour extraire le titre et l'artiste du track_name
+                const extractTrackInfo = (trackName) => {
+                  if (!trackName) return { title: 'Morceau inconnu', artist: 'Artiste inconnu' };
+                  
+                  // Si track_name contient "Artiste - Titre", on extrait
+                  if (trackName.includes(' - ')) {
+                    const parts = trackName.split(' - ');
+                    if (parts.length >= 2) {
+                      return {
+                        artist: parts[0].trim(),
+                        title: parts.slice(1).join(' - ').trim() // En cas de tirets dans le titre
+                      };
+                    }
+                  }
+                  
+                  // Sinon, on utilise track_name comme titre et proposition.artist comme artiste
+                  return {
+                    title: trackName,
+                    artist: proposition.artist || 'Artiste inconnu'
+                  };
+                };
+
+                const { title, artist } = extractTrackInfo(proposition.track_name);
+
+                return (
+                  <div
+                    key={proposition.id}
+                    className="p-4 bg-[#3A3A3A] rounded-lg border border-[#555]"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className="text-white font-medium text-sm">
+                          {title}
+                        </h4>
+                        <p className="text-gray-400 text-xs">
+                          {artist}
+                        </p>
+                        <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                          <span>⏱️ {proposition.duration || 'Durée inconnue'}</span>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(proposition.status)}`}>
+                        {getStatusText(proposition.status)}
+                      </span>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(proposition.status)}`}>
-                      {getStatusText(proposition.status)}
-                    </span>
-                  </div>
-                  
-                  {proposition.message && (
-                    <p className="text-gray-300 text-xs italic mt-2">
-                      "{proposition.message}"
+                    
+                    {proposition.message && (
+                      <p className="text-gray-300 text-xs italic mt-2">
+                        "{proposition.message}"
+                      </p>
+                    )}
+                    
+                    <p className="text-gray-500 text-xs mt-2">
+                      {new Date(proposition.created_at).toLocaleString()}
                     </p>
-                  )}
-                  
-                  <p className="text-gray-500 text-xs mt-2">
-                    {new Date(proposition.created_at).toLocaleString()}
-                  </p>
-                </div>
-              ))
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -141,106 +141,126 @@ export default function ModeratorInterface({ session, user, token, isTestMode })
     }
   }
 
-  const PropositionCard = ({ proposition, isPending = true }) => (
-    <div className="bg-[#3A3A3A] rounded-lg p-6 border border-[#555] hover:border-[#00FFD0]/50 transition-colors">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="text-white font-bold text-lg mb-1">
-            {proposition.track_name || 'Morceau inconnu'}
-          </h3>
-          <p className="text-gray-400 mb-2">
-            {proposition.artist || 'Artiste inconnu'}
-          </p>
-          <p className="text-[#00FFD0] text-sm">
-            Proposé par <span className="font-medium">{proposition.viewer_name}</span>
-          </p>
+  const PropositionCard = ({ proposition, isPending = true }) => {
+    // Fonction pour extraire le titre et l'artiste du track_name
+    const extractTrackInfo = (trackName) => {
+      if (!trackName) return { title: 'Morceau inconnu', artist: 'Artiste inconnu' };
+      
+      // Si track_name contient "Artiste - Titre", on extrait
+      if (trackName.includes(' - ')) {
+        const parts = trackName.split(' - ');
+        if (parts.length >= 2) {
+          return {
+            artist: parts[0].trim(),
+            title: parts.slice(1).join(' - ').trim() // En cas de tirets dans le titre
+          };
+        }
+      }
+      
+      // Sinon, on utilise track_name comme titre et proposition.artist comme artiste
+      return {
+        title: trackName,
+        artist: proposition.artist || 'Artiste inconnu'
+      };
+    };
+
+    const { title, artist } = extractTrackInfo(proposition.track_name);
+
+    return (
+      <div className="bg-[#3A3A3A] rounded-lg p-6 border border-[#555] hover:border-[#00FFD0]/50 transition-colors">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <h3 className="text-white font-bold text-lg mb-1">
+              {title}
+            </h3>
+            <p className="text-gray-400 mb-2">
+              {artist}
+            </p>
+            <p className="text-[#00FFD0] text-sm">
+              Proposé par <span className="font-medium">{proposition.viewer_name}</span>
+            </p>
+            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-2">
+              <span>⏱️ {proposition.duration || 'Durée inconnue'}</span>
+              <span>📅 {new Date(proposition.created_at).toLocaleString()}</span>
+            </div>
+          </div>
+          
+          {!isPending && (
+            <div className="flex items-center space-x-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                proposition.status === 'approved' 
+                  ? 'bg-green-500/20 text-green-400' 
+                  : 'bg-red-500/20 text-red-400'
+              }`}>
+                {proposition.status === 'approved' ? 'Approuvé' : 'Refusé'}
+              </span>
+              <span className="text-gray-500 text-xs">
+                {new Date(proposition.moderated_at).toLocaleString()}
+              </span>
+            </div>
+          )}
         </div>
-        
-        {!isPending && (
-          <div className="flex items-center space-x-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              proposition.status === 'approved' 
-                ? 'bg-green-500/20 text-green-400' 
-                : 'bg-red-500/20 text-red-400'
-            }`}>
-              {proposition.status === 'approved' ? 'Approuvé' : 'Refusé'}
-            </span>
-            <span className="text-gray-500 text-xs">
-              {new Date(proposition.moderated_at).toLocaleString()}
-            </span>
+
+        {proposition.message && (
+          <div className="bg-[#2D0036]/60 rounded-lg p-3 mb-4">
+            <p className="text-gray-300 text-sm italic">
+              "{proposition.message}"
+            </p>
           </div>
         )}
-      </div>
 
-      {proposition.message && (
-        <div className="bg-[#2D0036]/60 rounded-lg p-3 mb-4">
-          <p className="text-gray-300 text-sm italic">
-            "{proposition.message}"
-          </p>
-        </div>
-      )}
-
-      {/* Lecteur Spotify embeddé */}
-      {proposition.spotify_url && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-white font-medium text-sm">🎵 Prévisualisation</h4>
-            <a
-              href={proposition.spotify_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#1DB954] hover:text-[#1DB954]/80 text-xs transition-colors"
-            >
-              Ouvrir dans Spotify
-            </a>
+        {/* Lecteur Spotify embeddé */}
+        {proposition.spotify_url && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-white font-medium text-sm">🎵 Prévisualisation</h4>
+              <a
+                href={proposition.spotify_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1DB954] hover:text-[#1DB954]/80 text-xs transition-colors"
+              >
+                Ouvrir dans Spotify
+              </a>
+            </div>
+            <SpotifyPlayer 
+              spotifyUrl={proposition.spotify_url} 
+              compact={true}
+              width="100%"
+            />
           </div>
-          <SpotifyPlayer 
-            spotifyUrl={proposition.spotify_url} 
-            compact={true}
-            width="100%"
-          />
-        </div>
-      )}
+        )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <span className="text-gray-500 text-xs">
-            Proposé le {new Date(proposition.created_at).toLocaleString()}
-          </span>
-        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <span className="text-gray-500 text-xs">
+              Proposé le {new Date(proposition.created_at).toLocaleString()}
+            </span>
+          </div>
 
-        {/* Actions */}
-        <div className="flex items-center space-x-2">
-          {isPending ? (
-            <>
+          {/* Actions pour les propositions en attente */}
+          {isPending && (
+            <div className="flex items-center space-x-2">
               <button
                 onClick={() => handleApprove(proposition.id)}
-                className="p-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors"
-                title="Approuver"
+                className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
               >
-                <CheckIcon className="w-5 h-5" />
+                <CheckIcon className="w-4 h-4" />
+                <span className="text-sm">Approuver</span>
               </button>
               <button
                 onClick={() => handleReject(proposition.id)}
-                className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
-                title="Refuser"
+                className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
               >
-                <XMarkIcon className="w-5 h-5" />
+                <XMarkIcon className="w-4 h-4" />
+                <span className="text-sm">Refuser</span>
               </button>
-            </>
-          ) : (
-            <button
-              onClick={() => handleRequeue(proposition.id)}
-              className="p-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
-              title="Remettre en file d'attente"
-            >
-              <ArrowPathIcon className="w-5 h-5" />
-            </button>
+            </div>
           )}
         </div>
       </div>
-    </div>
-  )
+    );
+  };
 
   if (loading) {
     return (
